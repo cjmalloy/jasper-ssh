@@ -14,7 +14,7 @@ server {
     proxy_set_header Tag-Write-Access \"${TAG_WRITE_ACCESS}\";
 
     location / {
-        proxy_pass ${UPSTREAM-http://localhost:8081/}
+        proxy_pass ${UPSTREAM-http://localhost:8081/};
     }
 }
 "
