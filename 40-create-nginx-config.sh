@@ -7,6 +7,7 @@ server {
     server_name  localhost;
 
     proxy_set_header User-Tag \"${USER_TAG}\";
+    proxy_set_header User-Role \"${USER_ROLE}\";
     proxy_set_header Local-Origin \"${LOCAL_ORIGIN}\";
     proxy_set_header Read-Access \"${READ_ACCESS}\";
     proxy_set_header Write-Access \"${WRITE_ACCESS}\";
