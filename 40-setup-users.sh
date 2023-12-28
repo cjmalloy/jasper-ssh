@@ -132,8 +132,8 @@ process_keys() {
 }
 
 # Calculate initial checksum of authorized_keys
-if [ -f /authorized_keys ]; then
-   AUTHORIZED_KEYS_CHECKSUM=$(md5sum /authorized_keys | cut -d ' ' -f 1)
+if [ -f /config/authorized_keys ]; then
+   AUTHORIZED_KEYS_CHECKSUM=$(md5sum /config/authorized_keys | cut -d ' ' -f 1)
    echo $AUTHORIZED_KEYS_CHECKSUM > /tmp/authorized_keys_checksum
 fi
 
@@ -141,9 +141,9 @@ fi
 if [ -n "$AUTHORIZED_KEYS" ]; then
     echo "ENV Authorized Keys set"
     process_keys "$AUTHORIZED_KEYS"
-elif [ -f /authorized_keys ]; then
+elif [ -f /config/authorized_keys ]; then
     echo "Authorized Keys file mounted"
-    process_keys "$(cat /authorized_keys)"
+    process_keys "$(cat /config/authorized_keys)"
 else
     echo "No Authorized Keys" >&2
     exit 1
