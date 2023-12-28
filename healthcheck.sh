@@ -1,16 +1,29 @@
 #!/bin/sh
+
+# Function to check if a service is running
+service_check() {
+    if ! pgrep $1 > /dev/null; then
+        echo "$1 is not running."
+        exit 1
+    fi
+}
+
 # Check if SSHD is running
-if ! pgrep sshd > /dev/null; then
-    echo "SSHD is not running."
-    exit 1
-fi
+service_check sshd
 
 # Check if Nginx is running
-if ! pgrep nginx > /dev/null; then
-    echo "Nginx is not running."
-    exit 1
+service_check nginx
+
+# Check if the authorized_keys has been modified
+if [ -f /tmp/authorized_keys_checksum ] && [ -f /authorized_keys ]; then
+    CURRENT_CHECKSUM=$(md5sum /authorized_keys | cut -d ' ' -f 1)
+    ORIGINAL_CHECKSUM=$(cat /tmp/authorized_keys_checksum)
+    if [ "$CURRENT_CHECKSUM" != "$ORIGINAL_CHECKSUM" ]; then
+        echo "The /authorized_keys file has been modified."
+        exit 1
+    fi
 fi
 
-# Both services are running
-echo "Both SSHD and Nginx are running."
+# Both services are running, and authorized_keys has not been modified
+echo "SSH and Nginx are running, and authorized_keys is unchanged."
 exit 0
