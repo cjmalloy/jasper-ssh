@@ -13,8 +13,11 @@ PasswordAuthentication no
 AllowTcpForwarding yes
 X11Forwarding no
 AllowAgentForwarding no
-ForceCommand /bin/false
+UseDNS no
 PermitOpen none
+ForceCommand internal-sftp
+Subsystem sftp internal-sftp
+ChrootDirectory /opt/chrooted-sftp/%u
 "
 echo "$sshdConfig" > "$sshd_config"
 
@@ -82,6 +85,26 @@ setup_user() {
     echo "$port" > "$home_dir/banner.txt"
 
     chown -R $user:$user "$home_dir"
+
+    # Chroot User
+    user_chroot="/opt/chrooted-sftp/${user_origin:-default}"
+    mkdir -p "$user_chroot"
+
+    # Ensure the base structure of the chroot environment exists
+    for dir in /usr /bin /lib; do
+      mkdir -p "$user_chroot$dir"
+    done
+
+    # Copy the SFTP server binary
+    cp /usr/bin/sftp-server "$user_chroot/usr/bin/"
+
+    # Use scanelf to list needed shared libraries and copy them
+    scanelf -e /usr/bin/sftp-server | awk '{print $3}' | \
+        xargs -I {} cp {} "$user_chroot/lib/"
+
+    # Ensure correct permissions
+    chown root:root "$user_chroot"
+    chmod 755 "$user_chroot"
 
     # Append to SSHD Config for user-specific PermitOpen
     echo "Match User $user" >> "$sshd_config"
