@@ -105,6 +105,12 @@ server {
 
     location / {
         proxy_pass ${UPSTREAM-http://localhost:8081/};
+
+        # Add WebSocket support
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \"upgrade\";
+        proxy_set_header Host \$host;
     }
 }
 "
