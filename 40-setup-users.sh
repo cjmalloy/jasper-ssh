@@ -95,16 +95,22 @@ server {
     listen  [::]:$port;
     server_name  localhost;
 
-    proxy_set_header Local-Origin \"${user_origin}\";
-    proxy_set_header User-Tag \"${user_tag}\";
-    proxy_set_header User-Role \"${USER_ROLE}\";
-    proxy_set_header Read-Access \"${READ_ACCESS}\";
-    proxy_set_header Write-Access \"${WRITE_ACCESS}\";
-    proxy_set_header Tag-Read-Access \"${TAG_READ_ACCESS}\";
-    proxy_set_header Tag-Write-Access \"${TAG_WRITE_ACCESS}\";
-
     location / {
         proxy_pass ${UPSTREAM-http://localhost:8081/};
+
+        proxy_set_header Local-Origin \"${user_origin}\";
+        proxy_set_header User-Tag \"${user_tag}\";
+        proxy_set_header User-Role \"${USER_ROLE}\";
+        proxy_set_header Read-Access \"${READ_ACCESS}\";
+        proxy_set_header Write-Access \"${WRITE_ACCESS}\";
+        proxy_set_header Tag-Read-Access \"${TAG_READ_ACCESS}\";
+        proxy_set_header Tag-Write-Access \"${TAG_WRITE_ACCESS}\";
+
+        # Add WebSocket support
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \"upgrade\";
+        proxy_set_header Host \$host;
     }
 }
 "
