@@ -94,6 +94,7 @@ server {
     listen       $port;
     listen  [::]:$port;
     server_name  localhost;
+    client_body_buffer_size 10m;
 
     location / {
         proxy_pass ${UPSTREAM-http://localhost:8081/};
