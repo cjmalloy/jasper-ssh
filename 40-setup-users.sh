@@ -112,6 +112,9 @@ server {
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection \"upgrade\";
         proxy_set_header Host \$host;
+        # Increase timeouts for WebSocket connections
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
     }
 }
 "
