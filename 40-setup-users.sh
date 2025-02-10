@@ -8,6 +8,7 @@ sshd_config="/etc/ssh/sshd_config"
 # Base SSHD Config
 sshdConfig="
 LogLevel ${SSHD_LOG_LEVEL:-INFO}
+HostKey /etc/ssh/ssh_host_rsa_key
 PermitRootLogin no
 PasswordAuthentication no
 AllowTcpForwarding yes
@@ -155,8 +156,20 @@ else
     exit 1
 fi
 
-# Generate SSH host keys and start the SSH daemon
-ssh-keygen -A
+# Check for HOST_KEY environment variable or mounted file
+if [ -n "$HOST_KEY" ]; then
+    echo "ENV Host Key set"
+    echo "$HOST_KEY" > /etc/ssh/ssh_host_rsa_key
+    chmod 600 /etc/ssh/ssh_host_rsa_key
+elif [ -e /secrets/host_key ]; then
+    echo "Host Key file mounted"
+    cp /secrets/host_key /etc/ssh/ssh_host_rsa_key
+    chmod 600 /etc/ssh/ssh_host_rsa_key
+else
+    echo "No Host Key" >&2
+    exit 1
+fi
+
 /usr/sbin/sshd -e -D &
 SSHD_PID=$!
 echo "sshd started with PID $SSHD_PID"
