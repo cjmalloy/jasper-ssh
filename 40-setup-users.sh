@@ -54,8 +54,8 @@ setup_user() {
         # Concatenate origin and user tag
         user="${origin_part}_${user}"
     fi
-    # Normalize by replacing '/' with '_' in user tag
-    user=$(echo "$user" | sed 's/\//_/g')
+    # Normalize by replacing '.' with '-' and '/' with '_' in user tag
+    user=$(echo "$user" | sed 's/\./-/g' | sed 's/\//_/g')
 
     # User home dir
     home_dir="/home/$user"
