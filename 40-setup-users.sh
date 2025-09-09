@@ -93,7 +93,6 @@ setup_user() {
     nginx_config="
 server {
     listen       $port;
-    listen  [::]:$port;
     server_name  localhost;
     client_body_buffer_size 10m;
 
@@ -107,6 +106,7 @@ server {
         proxy_set_header Write-Access \"${WRITE_ACCESS}\";
         proxy_set_header Tag-Read-Access \"${TAG_READ_ACCESS}\";
         proxy_set_header Tag-Write-Access \"${TAG_WRITE_ACCESS}\";
+        proxy_set_header Authorization \"Bearer ${TOKEN}\";
 
         # Add WebSocket support
         proxy_http_version 1.1;
