@@ -14,10 +14,16 @@ PasswordAuthentication no
 AllowTcpForwarding yes
 X11Forwarding no
 AllowAgentForwarding no
-ForceCommand /bin/false
+UseDNS no
 PermitOpen none
+Subsystem sftp internal-sftp
+ForceCommand /bin/false
+ChrootDirectory /opt/chrooted-sftp/%u
 "
 echo "$sshdConfig" > "$sshd_config"
+
+# Convert the list into a space-separated list
+STORAGE_ACCESS=$(echo $STORAGE_ACCESS | tr ',' ' ')
 
 # Function to create user folder, set up authorized_keys, add sshd_config match user and create nginx server config
 setup_user() {
@@ -88,6 +94,33 @@ setup_user() {
     echo "Match User $user" >> "$sshd_config"
     echo "    PermitOpen localhost:$port" >> "$sshd_config"
     echo "    Banner $home_dir/banner.txt" >> "$sshd_config"
+
+    # Iterate over the list and check for the string
+    for tag in $STORAGE_ACCESS; do
+        if [ "$tag" = "$user_tag$user_origin" ]; then
+            sftp=true
+        fi
+    done
+
+    # Give user SFTP access
+    if [ -z "$sftp" ]; then
+      echo Chroot User
+      user_chroot="/opt/chrooted-sftp/$user"
+      mkdir -p "$user_chroot"
+
+      # Ensure the base structure of the chroot environment exists
+      for dir in /usr /bin /lib /storage; do
+        mkdir -p "$user_chroot$dir"
+      done
+
+      mount --bind "/var/lib/jasper/${user_origin:-default}" "$user_chroot/storage"
+
+      # Ensure correct permissions
+      chown root:root "$user_chroot"
+      chmod 755 "$user_chroot"
+
+      echo "    ForceCommand internal-sftp" >> "$sshd_config"
+    fi
 
     # Write NGINX config for the user
     nginx_config="
