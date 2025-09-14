@@ -113,7 +113,7 @@ setup_user() {
         mkdir -p "$user_chroot$dir"
       done
 
-      mount --bind /var/lib/jasper/${user_origin:-default} $user_chroot/storage
+      mount --bind "/var/lib/jasper/${user_origin:-default}" "$user_chroot/storage"
 
       # Ensure correct permissions
       chown root:root "$user_chroot"
