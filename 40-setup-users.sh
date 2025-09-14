@@ -98,7 +98,7 @@ setup_user() {
     # Iterate over the list and check for the string
     for tag in $STORAGE_ACCESS; do
         if [ "$tag" = "$user_tag$user_origin" ]; then
-            sftp = true
+            sftp=true
         fi
     done
 
