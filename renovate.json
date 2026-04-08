@@ -1,0 +1,24 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "enabledManagers": [
+    "custom.regex",
+    "github-actions"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/(^|/)Dockerfile$/"
+      ],
+      "matchStrings": [
+        "ARG OPENSSH_VERSION=(?<currentValue>[^\\s]+)"
+      ],
+      "depNameTemplate": "alpine_3_23/openssh",
+      "datasourceTemplate": "repology",
+      "versioningTemplate": "loose"
+    }
+  ]
+}
