@@ -5,6 +5,7 @@
   ],
   "enabledManagers": [
     "custom.regex",
+    "dockerfile",
     "github-actions"
   ],
   "customManagers": [
