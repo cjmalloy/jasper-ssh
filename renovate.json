@@ -11,7 +11,7 @@
     {
       "customType": "regex",
       "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
+        "(^|/)Dockerfile$"
       ],
       "matchStrings": [
         "ARG OPENSSH_VERSION=(?<currentValue>[^\\s]+)"
