@@ -14,9 +14,9 @@
         "(^|/)Dockerfile$"
       ],
       "matchStrings": [
-        "ARG OPENSSH_VERSION=(?<currentValue>[^\\s]+)"
+        "FROM\\s+[^\\s]+-alpine(?<alpineVersion>\\d+\\.\\d+)[^\\s]*\\s+ARG OPENSSH_VERSION=(?<currentValue>[^\\s]+)"
       ],
-      "depNameTemplate": "alpine_3_23/openssh",
+      "depNameTemplate": "alpine_{{replace '.' '_' alpineVersion}}/openssh",
       "datasourceTemplate": "repology",
       "versioningTemplate": "loose"
     }
