@@ -9,6 +9,7 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  security-events: read
 
 jobs:
   renovate:
@@ -23,4 +24,4 @@ jobs:
           RENOVATE_REPOSITORIES: ${{ github.repository }}
         with:
           configurationFile: renovate.json
-          token: ${{ github.token }}
+          token: ${{ secrets.RENOVATE_TOKEN || github.token }}
