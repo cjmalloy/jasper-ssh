@@ -1,0 +1,23 @@
+name: Renovate
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Run Renovate
+        uses: renovatebot/github-action@v46.1.10
+        with:
+          configurationFile: renovate.json
+          # The configured github-actions manager requires a token with workflow scope.
+          token: ${{ secrets.RENOVATE_TOKEN }}
