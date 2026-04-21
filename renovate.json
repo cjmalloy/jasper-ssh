@@ -3,6 +3,7 @@
   "extends": [
     "config:recommended"
   ],
+  "prCreation": "immediate",
   "enabledManagers": [
     "custom.regex",
     "dockerfile",
