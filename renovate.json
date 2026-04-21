@@ -17,7 +17,7 @@
       "matchStringsStrategy": "combination",
       "matchStrings": [
         "FROM\\s+[^\\s]+alpine(?<alpineMajor>\\d+)\\.(?<alpineMinor>\\d+)[^\\n]*",
-        "(?:^|\\n)ARG OPENSSH_VERSION=(?<currentValue>[^\\s]+)"
+        "(?m)^ARG OPENSSH_VERSION=(?<currentValue>[^\\s]+)$"
       ],
       "depNameTemplate": "alpine_{{alpineMajor}}_{{alpineMinor}}/openssh",
       "datasourceTemplate": "repology",
