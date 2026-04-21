@@ -12,7 +12,7 @@
     {
       "customType": "regex",
       "managerFilePatterns": [
-        "(^|/)Dockerfile$"
+        "/(^|/)Dockerfile$/"
       ],
       "matchStrings": [
         "FROM\\s+[^\\s]+alpine(?<alpineMajor>\\d+)\\.(?<alpineMinor>\\d+)[^\\n]*(?:\\n[^\\n]*)*?\\nARG OPENSSH_VERSION=(?<currentValue>[^\\s]+)"
