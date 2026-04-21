@@ -5,9 +5,7 @@
   ],
   "prCreation": "immediate",
   "enabledManagers": [
-    "custom.regex",
-    "dockerfile",
-    "github-actions"
+    "custom.regex"
   ],
   "customManagers": [
     {
