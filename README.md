@@ -1,5 +1,5 @@
 # jasper-ssh
-Create an SSH authenticated jasper proxy
+Create an SSH authenticated [jasper](https://github.com/cjmalloy/jasper) proxy
 
 | Environment Variable | Description                                                                                                                                                                                                    | Default Value            |
 |----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------|
