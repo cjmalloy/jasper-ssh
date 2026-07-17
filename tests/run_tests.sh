@@ -144,6 +144,22 @@ assert_header "$websocket_response" Connection upgrade
 assert_header "$websocket_response" Upgrade websocket
 pass "WebSocket upgrade headers pass through the proxy"
 
+info "Reordering authorized keys"
+awk '{ keys[NR] = $0 } END { for (line = NR; line > 0; line--) print keys[line] }' \
+    "$key_dir/authorized_keys" > "$key_dir/authorized_keys.new"
+mv "$key_dir/authorized_keys.new" "$key_dir/authorized_keys"
+sleep 3
+
+for pid in "$alice_pid" "$alice_second_pid" "$bob_pid" "$charlie_pid"; do
+    kill -0 "$pid" 2>/dev/null ||
+        fail "Reordering authorized keys closed an existing connection"
+done
+for port in 19001 19002 19003 19004; do
+    curl --fail --silent --max-time 2 "http://localhost:$port/" >/dev/null ||
+        fail "Reordering authorized keys stopped an existing tunnel"
+done
+pass "Reordering authorized keys does not revoke any users"
+
 info "Trying to forward alice to bob's upstream port"
 ssh "${ssh_options[@]}" -i "$key_dir/alice" -N \
     -L 19005:localhost:38023 alice@target-server &
