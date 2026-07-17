@@ -4,6 +4,10 @@ set -eu
 child_pid=
 termination_requested=false
 
+if [ "${CONFIG_CHANGE_MODE:-restart}" = restart ]; then
+    rm -f /tmp/jasper-ssh-draining
+fi
+
 request_drain() {
     termination_requested=true
     /lifecycle.sh begin-drain "termination requested"
