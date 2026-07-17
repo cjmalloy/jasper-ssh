@@ -2,19 +2,34 @@
 set -euo pipefail
 
 info() { printf '\033[0;34m[INFO]\033[0m %s\n' "$*"; }
-pass() { printf '\033[0;32m[PASS]\033[0m %s\n' "$*"; }
-fail() { printf '\033[0;31m[FAIL]\033[0m %s\n' "$*" >&2; exit 1; }
+pass() {
+    printf '\033[0;32m[PASS]\033[0m %s\n' "$*"
+    summary+=("[PASS] $*")
+}
+fail() {
+    printf '\033[0;31m[FAIL]\033[0m %s\n' "$*" >&2
+    summary+=("[FAIL] $*")
+    exit 1
+}
 
 key_dir=/workspace/ssh_config
 state_dir=/workspace/test_state
 alice_pid=
 bob_pid=
+summary=()
+summary_delimiter="=== TEST SUMMARY ==="
 
 cleanup() {
     [ -z "$alice_pid" ] || kill "$alice_pid" 2>/dev/null || true
     [ -z "$bob_pid" ] || kill "$bob_pid" 2>/dev/null || true
 }
-trap cleanup EXIT
+
+finish() {
+    cleanup
+    printf '\n%s\n' "$summary_delimiter"
+    printf '%s\n' "${summary[@]}"
+}
+trap finish EXIT
 
 ssh_options=(
     -o BatchMode=yes
