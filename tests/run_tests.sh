@@ -102,6 +102,8 @@ assert_proxy_headers() {
 
 [ -e "$state_dir/config-tested" ] ||
     fail "Missing configuration checks did not complete"
+[ ! -e "$state_dir/config-error" ] ||
+    fail "$(cat "$state_dir/config-error")"
 pass "Missing required configuration produces clear startup failures"
 
 info "Opening tunnels for test users"

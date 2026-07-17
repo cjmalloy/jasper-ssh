@@ -2,8 +2,9 @@
 set -eu
 
 fail() {
-    echo "$1" >&2
-    exit 1
+    echo "$1" > /test-state/config-error
+    touch /test-state/config-tested
+    tail -f /dev/null
 }
 
 if output=$(
