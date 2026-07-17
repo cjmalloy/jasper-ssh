@@ -10,7 +10,7 @@ service_check() {
 
 terminate_revoked_user_connections() {
     current_keys=$(mktemp)
-    sed 's/\#.*//;s/^[ \t]*//;s/[ \t]*$//;/^$/d' /config/authorized_keys > "$current_keys"
+    sed 's/#.*//;s/^[ \t]*//;s/[ \t]*$//;/^$/d' /config/authorized_keys > "$current_keys"
 
     for user_keys in /home/*/.ssh/authorized_keys; do
         [ -f "$user_keys" ] || continue
@@ -19,6 +19,7 @@ terminate_revoked_user_connections() {
 
         while IFS= read -r key; do
             if ! grep -Fqx "$key" "$current_keys"; then
+                # Any deleted key revokes every existing connection for that user.
                 echo "An authorized key for $user was deleted; terminating their SSH connections."
                 pkill -KILL -f "^sshd: ${user}@" 2>/dev/null || true
                 pkill -KILL -f "^sshd: ${user} \\[" 2>/dev/null || true
