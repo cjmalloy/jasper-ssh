@@ -25,6 +25,8 @@ terminate_revoked_user_connections() {
             if ! grep -Fqx "$key" "$current_keys"; then
                 # Any deleted key revokes every existing connection for that user.
                 echo "An authorized key for $user was deleted; terminating their SSH connections."
+                pkill -TERM -f "^sshd: ${user}(@| \\[)" 2>/dev/null || true
+                sleep 1
                 pkill -KILL -f "^sshd: ${user}(@| \\[)" 2>/dev/null || true
                 break
             fi
@@ -47,11 +49,15 @@ if [ -e /tmp/authorized_keys_checksum ] && [ -e /config/authorized_keys ]; then
     if [ "$CURRENT_CHECKSUM" != "$ORIGINAL_CHECKSUM" ]; then
         terminate_revoked_user_connections
     fi
-    SSH_PORT_HEX="0016" # The generated sshd config uses the default port 22.
+    SSH_PORT=$(awk 'tolower($1) == "port" { print $2; exit }' /etc/ssh/sshd_config)
+    SSH_PORT=${SSH_PORT:-22}
+    SSH_PORT_HEX=$(printf '%04X' "$SSH_PORT")
     TCP_STATE_ESTABLISHED="01"
     # In /proc/net/tcp, field 2 is the local address and field 4 is the TCP state.
-    SSHD_CONNECTION_COUNT=$(awk -v port="$SSH_PORT_HEX" -v state="$TCP_STATE_ESTABLISHED" 'BEGIN { count = 0 } $2 ~ "^[[:xdigit:]]+:" port "$" && $4 == state { count++ } END { print count }' /proc/net/tcp /proc/net/tcp6 2>/dev/null)
-    SSHD_CONNECTION_COUNT=${SSHD_CONNECTION_COUNT:-0}
+    if ! SSHD_CONNECTION_COUNT=$(awk -v port="$SSH_PORT_HEX" -v state="$TCP_STATE_ESTABLISHED" 'BEGIN { count = 0 } $2 ~ "^[[:xdigit:]]+:" port "$" && $4 == state { count++ } END { print count }' /proc/net/tcp /proc/net/tcp6 2>/dev/null); then
+        echo "Unable to count active SSH connections."
+        SSHD_CONNECTION_COUNT=1
+    fi
     if [ "$CURRENT_CHECKSUM" != "$ORIGINAL_CHECKSUM" ] && [ "$SSHD_CONNECTION_COUNT" -eq 0 ]; then
         echo "The /config/authorized_keys file has been modified and there are no active SSH connections."
         exit 1
