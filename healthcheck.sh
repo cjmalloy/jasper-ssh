@@ -20,6 +20,7 @@ if [ -e /tmp/authorized_keys_checksum ] && [ -e /config/authorized_keys ]; then
     ORIGINAL_CHECKSUM=$(cat /tmp/authorized_keys_checksum)
     SSH_PORT_HEX="0016"
     TCP_STATE_ESTABLISHED="01"
+    # Count established TCP sockets whose local port is the configured SSH port.
     SSHD_CONNECTION_COUNT=$(awk -v port="$SSH_PORT_HEX" -v state="$TCP_STATE_ESTABLISHED" 'BEGIN { count = 0 } $2 ~ ":" port "$" && $4 == state { count++ } END { print count }' /proc/net/tcp /proc/net/tcp6 2>/dev/null)
     SSHD_CONNECTION_COUNT=${SSHD_CONNECTION_COUNT:-0}
     if [ "$CURRENT_CHECKSUM" != "$ORIGINAL_CHECKSUM" ] && [ "$SSHD_CONNECTION_COUNT" -eq 0 ]; then
