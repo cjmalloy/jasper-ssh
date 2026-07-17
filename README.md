@@ -25,6 +25,6 @@ docker compose -f compose.test.yml up --build --abort-on-container-exit --exit-c
 docker compose -f compose.test.yml down -v
 ```
 
-The suite verifies that removing a key closes that user's existing connection,
-other users can drain normally, and restoring the key file does not cancel the
-latched shutdown.
+The suite verifies the headers sent to the upstream service, that removing a key
+closes that user's existing connection, that other users can drain normally,
+and that restoring the key file does not cancel the latched shutdown.

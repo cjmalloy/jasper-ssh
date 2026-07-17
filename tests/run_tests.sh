@@ -49,6 +49,31 @@ wait_for_file() {
     return 1
 }
 
+assert_header() {
+    local response=$1
+    local name=$2
+    local value=$3
+
+    printf '%s\n' "$response" | grep -Fqx -- "$name: $value" ||
+        fail "$name header was not set to $value"
+}
+
+assert_proxy_headers() {
+    local port=$1
+    local user_tag=$2
+    local response
+
+    response=$(curl --fail --silent --max-time 2 "http://localhost:$port/")
+    assert_header "$response" Authorization "******"
+    assert_header "$response" Local-Origin "@test-origin"
+    assert_header "$response" Read-Access test-read
+    assert_header "$response" Tag-Read-Access test-tag-read
+    assert_header "$response" Tag-Write-Access test-tag-write
+    assert_header "$response" User-Role test-role
+    assert_header "$response" User-Tag "$user_tag"
+    assert_header "$response" Write-Access test-write
+}
+
 info "Opening tunnels for alice and bob"
 ssh "${ssh_options[@]}" -i "$key_dir/alice" -N \
     -L 19001:localhost:38022 alice@target-server &
@@ -66,6 +91,10 @@ for port in 19001 19002; do
         fail "Tunnel on port $port did not proxy the backend"
 done
 pass "Both users can proxy requests through SSH"
+
+assert_proxy_headers 19001 alice
+assert_proxy_headers 19002 bob
+pass "Proxy requests include the configured headers for each user"
 
 info "Removing alice's authorized key"
 grep -v ' alice$' "$key_dir/authorized_keys" > "$key_dir/authorized_keys.new"

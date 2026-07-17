@@ -44,6 +44,7 @@ jobs:
                   .split('\n')
                   .filter(line => line.includes('test-runner-'))
                   .map(line => line.replace(/^.*?\|\s?/, ''))
+                  .map(line => line.replace(/[\u001b\uFFFD]\[[0-9;]*m/g, ''))
                   .join('\n')
               : 'No test output was produced.';
             const summary = `## ${icon} Docker Compose integration tests ${status}\n\n<details><summary>Test output</summary>\n\n\`\`\`text\n${log}\n\`\`\`\n</details>`;

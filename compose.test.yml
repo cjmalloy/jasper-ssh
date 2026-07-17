@@ -14,12 +14,21 @@ services:
 
   http-backend:
     image: python:3.14-alpine
-    command: ["python3", "-m", "http.server", "8080"]
+    command: ["python3", "/tests/http_backend.py"]
+    volumes:
+      - ./tests:/tests:ro
 
   target-server:
     build: .
     environment:
+      LOCAL_ORIGIN: "@test-origin"
+      READ_ACCESS: test-read
+      TAG_READ_ACCESS: test-tag-read
+      TAG_WRITE_ACCESS: test-tag-write
+      TOKEN: test-token
       UPSTREAM: http://http-backend:8080/
+      USER_ROLE: test-role
+      WRITE_ACCESS: test-write
     volumes:
       - ssh-config:/config
       - ssh-config:/secrets:ro
