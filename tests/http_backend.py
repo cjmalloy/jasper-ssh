@@ -9,6 +9,8 @@ class HeaderHandler(BaseHTTPRequestHandler):
             "Read-Access",
             "Tag-Read-Access",
             "Tag-Write-Access",
+            "Connection",
+            "Upgrade",
             "User-Role",
             "User-Tag",
             "Write-Access",

@@ -18,6 +18,22 @@ services:
     volumes:
       - ./tests:/tests:ro
 
+  config-tester:
+    build: .
+    entrypoint: ["/bin/sh", "/tests/test_missing_config.sh"]
+    volumes:
+      - ./tests:/tests:ro
+      - ssh-config:/keys:ro
+      - test-state:/test-state
+    depends_on:
+      keygen:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "test", "-f", "/test-state/config-tested"]
+      interval: 1s
+      timeout: 1s
+      retries: 10
+
   target-server:
     build: .
     environment:
@@ -52,6 +68,8 @@ services:
       - ssh-config:/workspace/ssh_config
       - test-state:/workspace/test_state
     depends_on:
+      config-tester:
+        condition: service_healthy
       target-server:
         condition: service_healthy
     entrypoint: ["/bin/bash", "/workspace/tests/run_tests.sh"]
