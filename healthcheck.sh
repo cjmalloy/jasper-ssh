@@ -8,6 +8,17 @@ service_check() {
     fi
 }
 
+signal_user_connections() {
+    signal=$1
+    user=$2
+
+    for process_name in sshd sshd-session; do
+        pgrep -f "^${process_name}: ${user}" 2>/dev/null | while IFS= read -r pid; do
+            kill "-$signal" "$pid" 2>/dev/null || true
+        done
+    done
+}
+
 terminate_revoked_user_connections() {
     current_keys=$(mktemp) || return
     if ! sed 's/#.*//;s/^[ \t]*//;s/[ \t]*$//;/^$/d' /config/authorized_keys > "$current_keys"; then
@@ -25,9 +36,9 @@ terminate_revoked_user_connections() {
             if ! grep -Fqx "$key" "$current_keys"; then
                 # Any deleted key revokes every existing connection for that user.
                 echo "An authorized key for $user was deleted; terminating their SSH connections."
-                pkill -TERM -f "^sshd: ${user}(@| \\[)" 2>/dev/null || true
+                signal_user_connections TERM "$user"
                 sleep 1
-                pkill -KILL -f "^sshd: ${user}(@| \\[)" 2>/dev/null || true
+                signal_user_connections KILL "$user"
                 break
             fi
         done < "$user_keys"

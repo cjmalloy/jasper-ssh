@@ -40,7 +40,11 @@ jobs:
             const icon = passed ? '✅' : '❌';
             const status = passed ? 'passed' : 'failed';
             const log = fs.existsSync('test-results.log')
-              ? fs.readFileSync('test-results.log', 'utf8').slice(-12000)
+              ? fs.readFileSync('test-results.log', 'utf8')
+                  .split('\n')
+                  .filter(line => line.includes('test-runner-'))
+                  .map(line => line.replace(/^.*?\|\s?/, ''))
+                  .join('\n')
               : 'No test output was produced.';
             const summary = `## ${icon} Docker Compose integration tests ${status}\n\n<details><summary>Test output</summary>\n\n\`\`\`text\n${log}\n\`\`\`\n</details>`;
 
