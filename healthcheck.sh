@@ -69,7 +69,7 @@ if [ -e /tmp/authorized_keys_checksum ] && [ -e /config/authorized_keys ]; then
     # In /proc/net/tcp, field 2 is the local address and field 4 is the TCP state.
     if ! SSHD_CONNECTION_COUNT=$(awk -v port="$SSH_PORT_HEX" -v state="$TCP_STATE_ESTABLISHED" 'BEGIN { count = 0 } $2 ~ "^[[:xdigit:]]+:" port "$" && $4 == state { count++ } END { print count }' /proc/net/tcp /proc/net/tcp6 2>/dev/null); then
         echo "Unable to count active SSH connections."
-        SSHD_CONNECTION_COUNT=1
+        SSHD_CONNECTION_COUNT=0
     fi
     if [ -e "$SHUTDOWN_LOCK" ] && [ "$SSHD_CONNECTION_COUNT" -eq 0 ]; then
         echo "The /config/authorized_keys file has been modified and there are no active SSH connections."
