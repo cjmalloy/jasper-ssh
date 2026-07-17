@@ -8,6 +8,28 @@ service_check() {
     fi
 }
 
+terminate_revoked_user_connections() {
+    current_keys=$(mktemp)
+    sed 's/\#.*//;s/^[ \t]*//;s/[ \t]*$//;/^$/d' /config/authorized_keys > "$current_keys"
+
+    for user_keys in /home/*/.ssh/authorized_keys; do
+        [ -f "$user_keys" ] || continue
+        user=${user_keys#/home/}
+        user=${user%%/*}
+
+        while IFS= read -r key; do
+            if ! grep -Fqx "$key" "$current_keys"; then
+                echo "An authorized key for $user was deleted; terminating their SSH connections."
+                pkill -KILL -f "^sshd: ${user}@" 2>/dev/null || true
+                pkill -KILL -f "^sshd: ${user} \\[" 2>/dev/null || true
+                break
+            fi
+        done < "$user_keys"
+    done
+
+    rm -f "$current_keys"
+}
+
 # Check if SSHD is running
 service_check sshd
 
@@ -18,6 +40,9 @@ service_check nginx
 if [ -e /tmp/authorized_keys_checksum ] && [ -e /config/authorized_keys ]; then
     CURRENT_CHECKSUM=$(md5sum /config/authorized_keys | cut -d ' ' -f 1)
     ORIGINAL_CHECKSUM=$(cat /tmp/authorized_keys_checksum)
+    if [ "$CURRENT_CHECKSUM" != "$ORIGINAL_CHECKSUM" ]; then
+        terminate_revoked_user_connections
+    fi
     SSH_PORT_HEX="0016"
     TCP_STATE_ESTABLISHED="01"
     # Count established TCP sockets whose local port is the configured SSH port.
