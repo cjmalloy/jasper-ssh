@@ -14,16 +14,17 @@ service_check sshd
 # Check if Nginx is running
 service_check nginx
 
-# Check if the authorized_keys has been modified
+# Check if the authorized_keys has been modified and all SSH connections have closed
 if [ -e /tmp/authorized_keys_checksum ] && [ -e /config/authorized_keys ]; then
     CURRENT_CHECKSUM=$(md5sum /config/authorized_keys | cut -d ' ' -f 1)
     ORIGINAL_CHECKSUM=$(cat /tmp/authorized_keys_checksum)
-    if [ "$CURRENT_CHECKSUM" != "$ORIGINAL_CHECKSUM" ]; then
-        echo "The /config/authorized_keys file has been modified."
+    SSHD_PROCESS_COUNT=$(pgrep sshd | wc -l)
+    if [ "$CURRENT_CHECKSUM" != "$ORIGINAL_CHECKSUM" ] && [ "$SSHD_PROCESS_COUNT" -eq 1 ]; then
+        echo "The /config/authorized_keys file has been modified and there are no active SSH connections."
         exit 1
     fi
 fi
 
-# Both services are running, and authorized_keys has not been modified
-echo "SSH and Nginx are running, and /config/authorized_keys is unchanged."
+# Both services are running
+echo "SSH and Nginx are running."
 exit 0
