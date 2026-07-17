@@ -4,3 +4,4 @@ COPY 40-setup-users.sh /docker-entrypoint.d
 COPY healthcheck.sh /
 COPY entrypoint.sh lifecycle.sh /
 ENTRYPOINT ["/entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]
