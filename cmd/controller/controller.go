@@ -96,6 +96,9 @@ func (c *rolloutController) run(ctx context.Context) error {
 			}
 			if err := c.reconcile(ctx); err != nil {
 				c.logger.Error("reconciliation failed", "error", err)
+				if !waitForDelay(ctx, time.Second) {
+					return nil
+				}
 				c.enqueue(nil)
 			}
 		}

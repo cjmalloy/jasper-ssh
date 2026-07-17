@@ -12,8 +12,11 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["configmaps"]
+    verbs: ["list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
     resourceNames: ["authorized-keys"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
     resourceNames: ["jasper-ssh"]

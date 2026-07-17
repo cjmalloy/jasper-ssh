@@ -66,18 +66,6 @@ wait_for_exit() {
     return 1
 }
 
-wait_for_file() {
-    local path=$1
-    local attempts=${2:-10}
-    local attempt
-
-    for ((attempt = 0; attempt < attempts; attempt++)); do
-        [ -e "$path" ] && return 0
-        sleep 1
-    done
-    return 1
-}
-
 assert_header() {
     local response=$1
     local name=$2
