@@ -1,0 +1,86 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  docker-compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run Docker Compose tests
+        id: tests
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          docker compose -f compose.test.yml up --build --abort-on-container-exit --exit-code-from test-runner 2>&1 | tee test-results.log
+
+      - name: Clean up Docker Compose
+        if: always()
+        run: docker compose -f compose.test.yml down -v
+
+      - name: Publish test summary
+        if: always()
+        uses: actions/github-script@v9
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+            const passed = process.env.TEST_OUTCOME === 'success';
+            const icon = passed ? '✅' : '❌';
+            const status = passed ? 'passed' : 'failed';
+            const log = fs.existsSync('test-results.log')
+              ? fs.readFileSync('test-results.log', 'utf8').slice(-12000)
+              : 'No test output was produced.';
+            const summary = `## ${icon} Docker Compose integration tests ${status}\n\n<details><summary>Test output</summary>\n\n\`\`\`text\n${log}\n\`\`\`\n</details>`;
+
+            await core.summary.addRaw(summary).write();
+            fs.writeFileSync('test-summary.md', summary);
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- docker-compose-integration-results -->';
+            const summary = fs.existsSync('test-summary.md')
+              ? fs.readFileSync('test-summary.md', 'utf8')
+              : '❌ Docker Compose integration test summary was not generated.';
+            const body = `${marker}\n${summary}`;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(comment => comment.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Fail on test failure
+        if: steps.tests.outcome != 'success'
+        run: exit 1

@@ -1,0 +1,52 @@
+services:
+  keygen:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile
+    volumes:
+      - ssh-config:/workspace/ssh_config
+    entrypoint: ["/bin/bash", "/workspace/tests/init_keys.sh"]
+    healthcheck:
+      test: ["CMD", "test", "-f", "/workspace/ssh_config/ready"]
+      interval: 1s
+      timeout: 1s
+      retries: 10
+
+  http-backend:
+    image: python:3.14-alpine
+    command: ["python3", "-m", "http.server", "8080"]
+
+  target-server:
+    build: .
+    environment:
+      UPSTREAM: http://http-backend:8080/
+    volumes:
+      - ssh-config:/config
+      - ssh-config:/secrets:ro
+      - test-state:/test-state
+    depends_on:
+      keygen:
+        condition: service_healthy
+      http-backend:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "/healthcheck.sh || { touch /test-state/unhealthy; exit 1; }"]
+      interval: 1s
+      timeout: 5s
+      retries: 20
+
+  test-runner:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile
+    volumes:
+      - ssh-config:/workspace/ssh_config
+      - test-state:/workspace/test_state
+    depends_on:
+      target-server:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/workspace/tests/run_tests.sh"]
+
+volumes:
+  ssh-config:
+  test-state:

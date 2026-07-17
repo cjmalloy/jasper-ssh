@@ -15,3 +15,16 @@ Create an SSH authenticated [jasper](https://github.com/cjmalloy/jasper) proxy
 | `TAG_READ_ACCESS`    | Sets `Tag-Read-Access` header. Requires upstream server to have `JASPER_ALLOW_AUTH_HEADERS` set.                                                                                                               |                          |
 | `TAG_WRITE_ACCESS`   | Sets `Tag-Write-Access` header. Requires upstream server to have `JASPER_ALLOW_AUTH_HEADERS` set.                                                                                                              |                          |
 | `SSHD_LOG_LEVEL`     | Sets the LogLevel in sshd_config.                                                                                                                                                                              | INFO                     |
+
+## Integration tests
+
+Run the Bash integration suite with Docker Compose:
+
+```sh
+docker compose -f compose.test.yml up --build --abort-on-container-exit --exit-code-from test-runner
+docker compose -f compose.test.yml down -v
+```
+
+The suite verifies that removing a key closes that user's existing connection,
+other users can drain normally, and restoring the key file does not cancel the
+latched shutdown.
