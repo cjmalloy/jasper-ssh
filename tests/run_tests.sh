@@ -14,10 +14,13 @@ fail() {
 
 key_dir=/workspace/ssh_config
 state_dir=/workspace/test_state
+expected_token=test-token
+expected_authorization=$(printf '%s %s' Bearer "$expected_token")
 alice_pid=
 bob_pid=
 summary=()
-summary_delimiter="=== TEST SUMMARY ==="
+summary_start_delimiter="=== TEST SUMMARY START ==="
+summary_end_delimiter="=== TEST SUMMARY END ==="
 
 cleanup() {
     [ -z "$alice_pid" ] || kill "$alice_pid" 2>/dev/null || true
@@ -26,8 +29,9 @@ cleanup() {
 
 finish() {
     cleanup
-    printf '\n%s\n' "$summary_delimiter"
+    printf '\n%s\n' "$summary_start_delimiter"
     printf '%s\n' "${summary[@]}"
+    printf '%s\n' "$summary_end_delimiter"
 }
 trap finish EXIT
 
@@ -79,7 +83,7 @@ assert_proxy_headers() {
     local response
 
     response=$(curl --fail --silent --max-time 2 "http://localhost:$port/")
-    assert_header "$response" Authorization "******"
+    assert_header "$response" Authorization "$expected_authorization"
     assert_header "$response" Local-Origin "@test-origin"
     assert_header "$response" Read-Access test-read
     assert_header "$response" Tag-Read-Access test-tag-read

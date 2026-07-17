@@ -39,18 +39,20 @@ jobs:
             const passed = process.env.TEST_OUTCOME === 'success';
             const icon = passed ? '✅' : '❌';
             const status = passed ? 'passed' : 'failed';
-            const delimiter = '=== TEST SUMMARY ===';
+            const summaryStart = '=== TEST SUMMARY START ===';
+            const summaryEnd = '=== TEST SUMMARY END ===';
             const log = fs.existsSync('test-results.log')
               ? fs.readFileSync('test-results.log', 'utf8')
                   .split('\n')
                   .filter(line => line.includes('test-runner-'))
                   .map(line => line.replace(/^.*?\|\s?/, ''))
-                  .map(line => line.replace(/[\u001b\uFFFD]\[[0-9;]*m/g, ''))
+                  .map(line => line.replace(/[\u001b\uFFFD]\[[0-9;?]*[ -/]*[@-~]/g, ''))
                   .join('\n')
               : 'No test output was produced.';
-            const delimiterIndex = log.lastIndexOf(delimiter);
-            const testSummary = delimiterIndex >= 0
-              ? log.slice(delimiterIndex + delimiter.length).trim()
+            const summaryStartIndex = log.lastIndexOf(summaryStart);
+            const summaryEndIndex = log.indexOf(summaryEnd, summaryStartIndex + summaryStart.length);
+            const testSummary = summaryStartIndex >= 0 && summaryEndIndex >= 0
+              ? log.slice(summaryStartIndex + summaryStart.length, summaryEndIndex).trim()
               : 'No test summary was produced.';
             const summary = `## ${icon} Docker Compose integration tests ${status}\n\n${testSummary}\n\n<details><summary>Test output</summary>\n\n\`\`\`text\n${log}\n\`\`\`\n</details>`;
 
