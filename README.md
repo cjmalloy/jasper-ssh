@@ -71,7 +71,9 @@ resource names to match your ConfigMap and Deployment.
 Run the Bash integration suite with Docker Compose:
 
 ```sh
-docker compose -f compose.test.yml up --build --abort-on-container-exit --exit-code-from test-runner
+docker compose -f compose.test.yml up --build --wait \
+  keygen http-backend config-tester target-server target-server-drain
+docker compose -f compose.test.yml run --rm --no-deps test-runner
 docker compose -f compose.test.yml down -v
 ```
 
