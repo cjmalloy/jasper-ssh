@@ -44,9 +44,11 @@ service_check nginx
 
 # Check if the authorized_keys has been modified and all SSH connections have closed
 if [ -e /tmp/authorized_keys_checksum ] && [ -e /config/authorized_keys ]; then
+    SHUTDOWN_LOCK=/tmp/authorized_keys_shutdown
     CURRENT_CHECKSUM=$(md5sum /config/authorized_keys | cut -d ' ' -f 1)
     ORIGINAL_CHECKSUM=$(cat /tmp/authorized_keys_checksum)
     if [ "$CURRENT_CHECKSUM" != "$ORIGINAL_CHECKSUM" ]; then
+        touch "$SHUTDOWN_LOCK"
         terminate_revoked_user_connections
     fi
     SSH_PORT=$(awk 'tolower($1) == "port" { print $2; exit }' /etc/ssh/sshd_config)
@@ -58,7 +60,7 @@ if [ -e /tmp/authorized_keys_checksum ] && [ -e /config/authorized_keys ]; then
         echo "Unable to count active SSH connections."
         SSHD_CONNECTION_COUNT=1
     fi
-    if [ "$CURRENT_CHECKSUM" != "$ORIGINAL_CHECKSUM" ] && [ "$SSHD_CONNECTION_COUNT" -eq 0 ]; then
+    if [ -e "$SHUTDOWN_LOCK" ] && [ "$SSHD_CONNECTION_COUNT" -eq 0 ]; then
         echo "The /config/authorized_keys file has been modified and there are no active SSH connections."
         exit 1
     fi
