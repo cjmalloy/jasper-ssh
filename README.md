@@ -73,7 +73,8 @@ Run the Bash integration suite with Docker Compose:
 ```sh
 docker compose -f compose.test.yml up --build --wait \
   keygen http-backend config-tester target-server target-server-drain
-docker compose -f compose.test.yml run --rm --no-deps test-runner
+docker compose -f compose.test.yml up --build --no-deps \
+  --abort-on-container-exit --exit-code-from test-runner test-runner
 docker compose -f compose.test.yml down -v
 ```
 

@@ -24,7 +24,9 @@ jobs:
           set -o pipefail
           docker compose -f compose.test.yml up --build --wait \
             keygen http-backend config-tester target-server target-server-drain
-          docker compose -f compose.test.yml run --rm --no-deps test-runner 2>&1 | tee test-results.log
+          docker compose -f compose.test.yml up --build --no-deps \
+            --abort-on-container-exit --exit-code-from test-runner \
+            test-runner 2>&1 | tee test-results.log
 
       - name: Clean up Docker Compose
         if: always()
@@ -46,6 +48,7 @@ jobs:
             const log = fs.existsSync('test-results.log')
               ? fs.readFileSync('test-results.log', 'utf8')
                   .split('\n')
+                  .filter(line => line.includes('test-runner-'))
                   .map(line => line.replace(/^.*?\|\s?/, ''))
                   .map(line => line.replace(/[\u001b\uFFFD]\[[0-9;?]*[ -/]*[@-~]/g, ''))
                   .join('\n')
