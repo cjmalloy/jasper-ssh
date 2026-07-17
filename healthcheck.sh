@@ -9,14 +9,18 @@ service_check() {
 }
 
 terminate_revoked_user_connections() {
-    current_keys=$(mktemp)
-    sed 's/#.*//;s/^[ \t]*//;s/[ \t]*$//;/^$/d' /config/authorized_keys > "$current_keys"
+    current_keys=$(mktemp) || return
+    if ! sed 's/#.*//;s/^[ \t]*//;s/[ \t]*$//;/^$/d' /config/authorized_keys > "$current_keys"; then
+        rm -f "$current_keys"
+        return
+    fi
 
     for user_keys in /home/*/.ssh/authorized_keys; do
         [ -f "$user_keys" ] || continue
         user=${user_keys#/home/}
         user=${user%%/*}
 
+        # These files contain the normalized keys generated from the original input.
         while IFS= read -r key; do
             if ! grep -Fqx "$key" "$current_keys"; then
                 # Any deleted key revokes every existing connection for that user.
@@ -47,7 +51,7 @@ if [ -e /tmp/authorized_keys_checksum ] && [ -e /config/authorized_keys ]; then
     SSH_PORT_HEX="0016"
     TCP_STATE_ESTABLISHED="01"
     # Count established TCP sockets whose local port is the configured SSH port.
-    SSHD_CONNECTION_COUNT=$(awk -v port="$SSH_PORT_HEX" -v state="$TCP_STATE_ESTABLISHED" 'BEGIN { count = 0 } $2 ~ ":" port "$" && $4 == state { count++ } END { print count }' /proc/net/tcp /proc/net/tcp6 2>/dev/null)
+    SSHD_CONNECTION_COUNT=$(awk -v port="$SSH_PORT_HEX" -v state="$TCP_STATE_ESTABLISHED" 'BEGIN { count = 0 } $2 ~ "^[[:xdigit:]]+:" port "$" && $4 == state { count++ } END { print count }' /proc/net/tcp /proc/net/tcp6 2>/dev/null)
     SSHD_CONNECTION_COUNT=${SSHD_CONNECTION_COUNT:-0}
     if [ "$CURRENT_CHECKSUM" != "$ORIGINAL_CHECKSUM" ] && [ "$SSHD_CONNECTION_COUNT" -eq 0 ]; then
         echo "The /config/authorized_keys file has been modified and there are no active SSH connections."
