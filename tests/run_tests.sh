@@ -20,6 +20,8 @@ alice_pid=
 alice_second_pid=
 bob_pid=
 charlie_pid=
+drain_alice_pid=
+drain_bob_pid=
 unauthorized_pid=
 summary=()
 summary_start_delimiter="=== TEST SUMMARY START ==="
@@ -30,6 +32,8 @@ cleanup() {
     [ -z "$alice_second_pid" ] || kill "$alice_second_pid" 2>/dev/null || true
     [ -z "$bob_pid" ] || kill "$bob_pid" 2>/dev/null || true
     [ -z "$charlie_pid" ] || kill "$charlie_pid" 2>/dev/null || true
+    [ -z "$drain_alice_pid" ] || kill "$drain_alice_pid" 2>/dev/null || true
+    [ -z "$drain_bob_pid" ] || kill "$drain_bob_pid" 2>/dev/null || true
     [ -z "$unauthorized_pid" ] || kill "$unauthorized_pid" 2>/dev/null || true
 }
 
@@ -119,8 +123,14 @@ bob_pid=$!
 ssh "${ssh_options[@]}" -i "$key_dir/charlie" -N \
     -L 19003:localhost:38024 custom-origin_charlie@target-server &
 charlie_pid=$!
+ssh "${ssh_options[@]}" -i "$key_dir/alice" -N \
+    -L 19101:localhost:38022 alice@target-server-drain &
+drain_alice_pid=$!
+ssh "${ssh_options[@]}" -i "$key_dir/bob" -N \
+    -L 19102:localhost:38023 bob@target-server-drain &
+drain_bob_pid=$!
 
-for port in 19001 19002 19003 19004; do
+for port in 19001 19002 19003 19004 19101 19102; do
     for _ in {1..10}; do
         curl --fail --silent --max-time 2 "http://localhost:$port/" >/dev/null && break
         sleep 1
@@ -150,11 +160,12 @@ awk '{ keys[NR] = $0 } END { for (line = NR; line > 0; line--) print keys[line] 
 mv "$key_dir/authorized_keys.new" "$key_dir/authorized_keys"
 sleep 3
 
-for pid in "$alice_pid" "$alice_second_pid" "$bob_pid" "$charlie_pid"; do
+for pid in "$alice_pid" "$alice_second_pid" "$bob_pid" "$charlie_pid" \
+    "$drain_alice_pid" "$drain_bob_pid"; do
     kill -0 "$pid" 2>/dev/null ||
         fail "Reordering authorized keys closed an existing connection"
 done
-for port in 19001 19002 19003 19004; do
+for port in 19001 19002 19003 19004 19101 19102; do
     curl --fail --silent --max-time 2 "http://localhost:$port/" >/dev/null ||
         fail "Reordering authorized keys stopped an existing tunnel"
 done
@@ -182,8 +193,11 @@ wait_for_exit "$alice_pid" 10 ||
     fail "Alice's first connection remained open after her second key was removed"
 wait_for_exit "$alice_second_pid" 10 ||
     fail "Alice's second connection remained open after its key was removed"
+wait_for_exit "$drain_alice_pid" 10 ||
+    fail "Alice's drain-mode connection remained open after her key was removed"
 alice_pid=
 alice_second_pid=
+drain_alice_pid=
 pass "Revoking one of multiple keys closes all sessions for that user"
 
 kill -0 "$bob_pid" 2>/dev/null ||
@@ -192,12 +206,21 @@ kill -0 "$charlie_pid" 2>/dev/null ||
     fail "Removing alice's key also closed charlie's connection"
 curl --fail --silent --max-time 2 http://localhost:19002/ >/dev/null ||
     fail "Bob's tunnel stopped proxying after alice's key was removed"
+curl --fail --silent --max-time 2 http://localhost:19102/ >/dev/null ||
+    fail "Drain mode stopped bob's authorized session"
 pass "Other users remain connected while shutdown drains"
 
-sleep 3
-[ ! -e "$state_dir/unhealthy" ] ||
-    fail "Shutdown completed while bob still had an active connection"
-pass "Shutdown waits for active SSH connections"
+ssh "${ssh_options[@]}" -i "$key_dir/bob" -N \
+    -L 19103:localhost:38023 bob@target-server-drain &
+unauthorized_pid=$!
+sleep 2
+if curl --fail --silent --max-time 2 http://localhost:19103/ >/dev/null; then
+    fail "Drain mode accepted a new SSH connection"
+fi
+kill "$unauthorized_pid" 2>/dev/null || true
+wait "$unauthorized_pid" 2>/dev/null || true
+unauthorized_pid=
+pass "Drain mode becomes unavailable while preserving authorized sessions"
 
 info "Restoring authorized_keys to verify shutdown remains latched"
 cp "$key_dir/authorized_keys.original" "$key_dir/authorized_keys"
@@ -209,9 +232,20 @@ kill "$charlie_pid"
 wait "$charlie_pid" 2>/dev/null || true
 charlie_pid=
 
-wait_for_file "$state_dir/unhealthy" 5 ||
-    fail "Shutdown was cancelled when authorized_keys was restored"
+ssh "${ssh_options[@]}" -o ConnectionAttempts=20 -i "$key_dir/bob" -N \
+    -L 19006:localhost:38023 bob@target-server &
+bob_pid=$!
+for _ in {1..20}; do
+    curl --fail --silent --max-time 2 http://localhost:19006/ >/dev/null && break
+    sleep 1
+done
+curl --fail --silent --max-time 2 http://localhost:19006/ >/dev/null ||
+    fail "Restart mode did not accept connections after sessions drained"
 shutdown_elapsed=$((SECONDS - shutdown_started))
-[ "$shutdown_elapsed" -le 5 ] ||
-    fail "Shutdown took too long after all SSH connections closed"
-pass "Shutdown completes promptly after connections drain, even if keys are restored"
+[ "$shutdown_elapsed" -le 20 ] ||
+    fail "Restart mode took too long to return"
+pass "Restart mode exits and restarts after connections drain"
+
+curl --fail --silent --max-time 2 http://localhost:19102/ >/dev/null ||
+    fail "Restoring authorized_keys cancelled drain mode"
+pass "Drain mode remains latched after authorized_keys is restored"

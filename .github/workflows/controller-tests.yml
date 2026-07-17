@@ -1,0 +1,27 @@
+name: Controller Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test
+        run: go test ./cmd/controller
+      - name: Vet
+        run: go vet ./cmd/controller
+      - name: Build
+        run: go build ./cmd/controller

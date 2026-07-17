@@ -15,8 +15,18 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - component: jasper-ssh
+            dockerfile: Dockerfile
+            image_suffix: ""
+            package_name: jasper-ssh
+          - component: controller
+            dockerfile: Dockerfile.controller
+            image_suffix: "-controller"
+            package_name: jasper-ssh-controller
     permissions:
       pull-requests: write
       contents: read
@@ -57,7 +67,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image_suffix }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -72,12 +82,13 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
+          file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
 
       # Sign the resulting Docker image digest
       # This will only write to the public Rekor transparency log when the Docker
@@ -101,5 +112,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: 'Built docker image: https://github.com/${{ github.repository }}/pkgs/container/jasper-ssh/pr-${{ github.event.number }}'
+              body: 'Built ${{ matrix.component }} image: https://github.com/${{ github.repository }}/pkgs/container/${{ matrix.package_name }}/pr-${{ github.event.number }}'
             })
