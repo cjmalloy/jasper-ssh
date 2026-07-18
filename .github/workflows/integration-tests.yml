@@ -23,7 +23,7 @@ jobs:
         run: |
           set -o pipefail
           docker compose -f compose.test.yml up --build --wait \
-            keygen http-backend config-tester target-server target-server-drain
+            keygen http-backend config-tester target-server
           docker compose -f compose.test.yml up --build --no-deps \
             --abort-on-container-exit --exit-code-from test-runner \
             test-runner 2>&1 | tee test-results.log

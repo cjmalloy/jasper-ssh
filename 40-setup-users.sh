@@ -4,16 +4,7 @@ echo "Writing SSHD Config and NGINX Configs for Users"
 
 base_port=38022
 sshd_config="/etc/ssh/sshd_config"
-CONFIG_CHANGE_MODE=${CONFIG_CHANGE_MODE:-restart}
 configured_users=" "
-
-case "$CONFIG_CHANGE_MODE" in
-    restart|drain) ;;
-    *)
-        echo "CONFIG_CHANGE_MODE must be restart or drain" >&2
-        exit 1
-        ;;
-esac
 
 # Base SSHD Config
 sshdConfig="
@@ -165,8 +156,9 @@ if [ -n "$AUTHORIZED_KEYS" ]; then
     process_keys "$AUTHORIZED_KEYS"
 elif [ -e /config/authorized_keys ]; then
     echo "Authorized Keys file mounted"
+    AUTHORIZED_KEYS_CHECKSUM=$(md5sum /config/authorized_keys | cut -d ' ' -f 1)
+    echo "$AUTHORIZED_KEYS_CHECKSUM" > /tmp/authorized_keys_checksum
     process_keys "$(cat /config/authorized_keys)"
-    /lifecycle.sh initialize
 else
     echo "No Authorized Keys" >&2
     exit 1
@@ -188,9 +180,4 @@ fi
 
 /usr/sbin/sshd -e -D &
 SSHD_PID=$!
-echo "$SSHD_PID" > /tmp/sshd.pid
 echo "sshd started with PID $SSHD_PID"
-
-if [ -e /config/authorized_keys ]; then
-    /lifecycle.sh watch &
-fi
