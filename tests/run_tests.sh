@@ -142,6 +142,9 @@ assert_header "$websocket_response" Connection upgrade
 assert_header "$websocket_response" Upgrade websocket
 pass "WebSocket upgrade headers pass through the proxy"
 
+# Docker activates restart policies after a container has run successfully for 10 seconds.
+sleep 10
+
 info "Reordering authorized keys"
 awk '{ keys[NR] = $0 } END { for (line = NR; line > 0; line--) print keys[line] }' \
     "$key_dir/authorized_keys" > "$key_dir/authorized_keys.new"
