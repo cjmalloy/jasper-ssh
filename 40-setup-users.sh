@@ -5,6 +5,7 @@ echo "Writing SSHD Config and NGINX Configs for Users"
 base_port=38022
 sshd_config="/etc/ssh/sshd_config"
 CONFIG_CHANGE_MODE=${CONFIG_CHANGE_MODE:-restart}
+configured_users=" "
 
 case "$CONFIG_CHANGE_MODE" in
     restart|drain) ;;
@@ -31,7 +32,6 @@ echo "$sshdConfig" > "$sshd_config"
 # Function to create user folder, set up authorized_keys, add sshd_config match user and create nginx server config
 setup_user() {
     key="$1"
-    port=$((base_port++))
 
     # Extract user tag and optional host origin from the key comment
     comment_field=$(echo "$key" | awk '{print $NF}')
@@ -66,19 +66,27 @@ setup_user() {
     # Normalize by replacing '.' with '-' and '/' with '_' in user tag
     user=$(echo "$user" | sed 's/\./-/g' | sed 's/\//_/g')
 
+    case "$configured_users" in
+        *" $user "*)
+            echo "Adding extra SSH pubkey for $user."
+            echo "$key" >> "/home/$user/.ssh/authorized_keys"
+            return
+            ;;
+    esac
+    configured_users="${configured_users}${user} "
+    port=$((base_port++))
+
     # User home dir
     home_dir="/home/$user"
 
     # Check if the user already exists
     if grep -q "^$user:" /etc/passwd; then
-        echo "Adding extra SSH pubkey for $user."
-        echo "$key" >> "$home_dir/.ssh/authorized_keys"
-        return
+        echo "Refreshing configuration for $user."
+    else
+        # Create user
+        adduser --disabled-password --gecos "" "$user"
+        passwd -u "$user"
     fi
-
-    # Create user
-    adduser --disabled-password --gecos "" "$user"
-    passwd -u "$user"
 
     # Create user home directory if it doesn't exist
     mkdir -p "$home_dir/.ssh"
