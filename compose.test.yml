@@ -38,6 +38,7 @@ services:
     build: .
     restart: unless-stopped
     environment:
+      CONFIG_CHANGE_MODE: drain
       LOCAL_ORIGIN: "@test-origin"
       READ_ACCESS: test-read
       TAG_READ_ACCESS: test-tag-read
@@ -61,6 +62,32 @@ services:
       timeout: 5s
       retries: 20
 
+  target-server-restart:
+    build: .
+    environment:
+      LOCAL_ORIGIN: "@test-origin"
+      READ_ACCESS: test-read
+      TAG_READ_ACCESS: test-tag-read
+      TAG_WRITE_ACCESS: test-tag-write
+      TOKEN: test-token
+      UPSTREAM: http://http-backend:8080/
+      USER_ROLE: test-role
+      WRITE_ACCESS: test-write
+    volumes:
+      - ssh-config:/config
+      - ssh-config:/secrets:ro
+      - test-state:/test-state
+    depends_on:
+      keygen:
+        condition: service_healthy
+      http-backend:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "/healthcheck.sh || { touch /test-state/restart-unhealthy; exit 1; }"]
+      interval: 1s
+      timeout: 5s
+      retries: 20
+
   test-runner:
     build:
       context: .
@@ -72,6 +99,8 @@ services:
       config-tester:
         condition: service_healthy
       target-server:
+        condition: service_healthy
+      target-server-restart:
         condition: service_healthy
     entrypoint: ["/bin/bash", "/workspace/tests/run_tests.sh"]
 

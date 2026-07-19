@@ -120,6 +120,7 @@ assert_header "$websocket_response" Upgrade websocket
 pass "WebSocket upgrade headers pass through the proxy"
 
 info "Reordering authorized keys"
+cp "$key_dir/authorized_keys" "$key_dir/authorized_keys.original"
 awk '{ keys[NR] = $0 } END { for (line = NR; line > 0; line--) print keys[line] }' \
     "$key_dir/authorized_keys" > "$key_dir/authorized_keys.new"
 mv "$key_dir/authorized_keys.new" "$key_dir/authorized_keys"
@@ -134,6 +135,14 @@ for port in 19001 19002 19003 19004; do
         fail "Reordering authorized keys stopped an existing tunnel"
 done
 pass "Reordering authorized keys does not revoke any users"
+
+for _ in {1..10}; do
+    [ -e "$state_dir/restart-unhealthy" ] && break
+    sleep 1
+done
+[ -e "$state_dir/restart-unhealthy" ] ||
+    fail "Restart mode did not immediately request a restart"
+pass "Restart mode immediately requests a restart after authorized keys change"
 
 info "Trying to forward alice to bob's upstream port"
 ssh "${ssh_options[@]}" -i "$key_dir/alice" -N \
@@ -160,6 +169,16 @@ done
 [ ! -e "$state_dir/unhealthy" ] ||
     fail "Health check failed while SSH connections were active"
 pass "Health check stays healthy while SSH connections drain"
+
+info "Restoring authorized keys after shutdown was requested"
+cp "$key_dir/authorized_keys.original" "$key_dir/authorized_keys"
+rm -f "$state_dir/restart-unhealthy"
+sleep 2
+[ -e "$state_dir/restart-unhealthy" ] ||
+    fail "Restoring authorized keys cancelled restart mode shutdown"
+[ ! -e "$state_dir/unhealthy" ] ||
+    fail "Restoring authorized keys aborted connection draining"
+pass "Restoring authorized keys does not cancel latched shutdown"
 
 cleanup
 alice_pid=

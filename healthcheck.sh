@@ -16,9 +16,17 @@ service_check nginx
 
 # Check if the authorized_keys has been modified
 if [ -e /tmp/authorized_keys_checksum ] && [ -e /config/authorized_keys ]; then
+    SHUTDOWN_LATCH=/tmp/authorized_keys_shutdown
     CURRENT_CHECKSUM=$(md5sum /config/authorized_keys | cut -d ' ' -f 1)
     ORIGINAL_CHECKSUM=$(cat /tmp/authorized_keys_checksum)
     if [ "$CURRENT_CHECKSUM" != "$ORIGINAL_CHECKSUM" ]; then
+        touch "$SHUTDOWN_LATCH"
+    fi
+    if [ -e "$SHUTDOWN_LATCH" ]; then
+        if [ "${CONFIG_CHANGE_MODE:-restart}" != "drain" ]; then
+            echo "The /config/authorized_keys file has been modified."
+            exit 1
+        fi
         CONNECTION_COUNT=$(awk '
             $2 ~ /:0016$/ && $4 == "01" { count++ }
             END { print count + 0 }
@@ -27,7 +35,7 @@ if [ -e /tmp/authorized_keys_checksum ] && [ -e /config/authorized_keys ]; then
             echo "The /config/authorized_keys file has been modified."
             exit 1
         fi
-        echo "The /config/authorized_keys file has been modified; waiting for $CONNECTION_COUNT SSH connection(s) to close."
+        echo "The /config/authorized_keys file has been modified; draining $CONNECTION_COUNT SSH connection(s)."
         exit 0
     fi
 fi

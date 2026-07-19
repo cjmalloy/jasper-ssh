@@ -23,7 +23,7 @@ jobs:
         run: |
           set -o pipefail
           docker compose -f compose.test.yml up --build --wait \
-            keygen http-backend config-tester target-server
+            keygen http-backend config-tester target-server target-server-restart
           docker compose -f compose.test.yml up --build --no-deps \
             --abort-on-container-exit --exit-code-from test-runner \
             test-runner 2>&1 | tee test-results.log
@@ -58,7 +58,7 @@ jobs:
             const testSummary = summaryStartIndex >= 0 && summaryEndIndex >= 0
               ? log.slice(summaryStartIndex + summaryStart.length, summaryEndIndex).trim()
               : 'No test summary was produced.';
-            const summary = `## ${icon} Docker Compose integration tests ${status}\n\n${testSummary}\n\n<details><summary>Test output</summary>\n\n\`\`\`text\n${log}\n\`\`\`\n</details>`;
+            const summary = `## ${icon} jasper-ssh integration tests ${status}\n\n${testSummary}\n\n<details><summary>jasper-ssh test output</summary>\n\n\`\`\`text\n${log}\n\`\`\`\n</details>\n\n_Controller tests run separately in the Controller Tests workflow._`;
 
             await core.summary.addRaw(summary).write();
             fs.writeFileSync('test-summary.md', summary);
