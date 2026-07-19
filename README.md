@@ -15,15 +15,17 @@ Create an SSH authenticated [jasper](https://github.com/cjmalloy/jasper) proxy
 | `TAG_READ_ACCESS`    | Sets `Tag-Read-Access` header. Requires upstream server to have `JASPER_ALLOW_AUTH_HEADERS` set.                                                                                                               |                          |
 | `TAG_WRITE_ACCESS`   | Sets `Tag-Write-Access` header. Requires upstream server to have `JASPER_ALLOW_AUTH_HEADERS` set.                                                                                                              |                          |
 | `SSHD_LOG_LEVEL`     | Sets the LogLevel in sshd_config.                                                                                                                                                                              | INFO                     |
-| `CONFIG_CHANGE_MODE` | Controls health after `/config/authorized_keys` changes: `restart` fails immediately; `drain` waits for established SSH connections to close.                                                                | `restart`                |
+| `CONFIG_CHANGE_MODE` | Controls health after a semantic `/config/authorized_keys` change: `restart` fails immediately; `drain` waits for established SSH connections to close.                                                     | `restart`                |
 
 ## Authorized-key changes
 
-When the mounted `/config/authorized_keys` checksum changes, shutdown remains
-latched even if the original file contents are restored. In the default
+When the mounted `/config/authorized_keys` changes, the health check compares
+the normalized key set, so reordering keys does not request a restart. If a user
+loses any key, all of that user's existing sessions are terminated. Shutdown
+remains latched even if the original file contents are restored. In the default
 `restart` mode, the health check fails immediately so the orchestrator can
 replace the container and load the new keys. In `drain` mode, it continues to
-pass while established SSH connections remain and fails once they close.
+pass while other established SSH connections remain and fails once they close.
 
 ## Kubernetes rollout controller
 
@@ -61,6 +63,7 @@ docker compose -f compose.test.yml up --build --no-deps \
 docker compose -f compose.test.yml down -v
 ```
 
-The jasper-ssh suite verifies the headers sent to the upstream service and both
-restart and drain health-check behavior after an authorized-key change.
+The jasper-ssh suite verifies the headers sent to the upstream service, semantic
+key comparison, per-user revocation, and both restart and drain health-check
+behavior after an authorized-key change.
 Controller tests are separate and run with `go test ./...` from `controller/`.

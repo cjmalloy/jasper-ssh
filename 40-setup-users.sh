@@ -148,8 +148,8 @@ if [ -n "$AUTHORIZED_KEYS" ]; then
     process_keys "$AUTHORIZED_KEYS"
 elif [ -e /config/authorized_keys ]; then
     echo "Authorized Keys file mounted"
-    AUTHORIZED_KEYS_CHECKSUM=$(md5sum /config/authorized_keys | cut -d ' ' -f 1)
-    echo "$AUTHORIZED_KEYS_CHECKSUM" > /tmp/authorized_keys_checksum
+    sed 's/#.*//;s/^[	 ]*//;s/[	 ]*$//;/^$/d' /config/authorized_keys |
+        LC_ALL=C sort -u > /tmp/authorized_keys.normalized
     process_keys "$(cat /config/authorized_keys)"
 else
     echo "No Authorized Keys" >&2

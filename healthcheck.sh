@@ -1,6 +1,54 @@
 #!/bin/sh
 
 CONFIG_CHANGE_MODE=${CONFIG_CHANGE_MODE:-restart}
+NORMALIZED_KEYS=/tmp/authorized_keys.normalized
+SHUTDOWN_LATCH=/tmp/authorized_keys_shutdown
+REVOCATION_LOCK=/tmp/authorized_keys_revocation_started
+
+normalize_keys() {
+    sed 's/#.*//;s/^[	 ]*//;s/[	 ]*$//;/^$/d' "$1" |
+        LC_ALL=C sort -u > "$2"
+}
+
+signal_user_connections() {
+    signal=$1
+    user=$2
+    escaped_user=$(printf '%s' "$user" | sed 's/[][\\.^$*+?{}|()]/\\&/g')
+
+    for process_name in sshd sshd-session; do
+        pgrep -f "^${process_name}: ${escaped_user}" 2>/dev/null |
+            while IFS= read -r pid; do
+                kill "-$signal" "$pid" 2>/dev/null || true
+            done
+    done
+}
+
+terminate_revoked_user_connections() {
+    current_keys=$1
+    revoked_users=
+
+    for user_keys in /home/*/.ssh/authorized_keys; do
+        [ -f "$user_keys" ] || continue
+        user=${user_keys#/home/}
+        user=${user%%/*}
+
+        while IFS= read -r key; do
+            if ! grep -Fqx -- "$key" "$current_keys"; then
+                echo "An authorized key for $user was removed; terminating their SSH connections."
+                revoked_users="$revoked_users $user"
+                break
+            fi
+        done < "$user_keys"
+    done
+
+    for user in $revoked_users; do
+        signal_user_connections TERM "$user"
+    done
+    [ -z "$revoked_users" ] || sleep 1
+    for user in $revoked_users; do
+        signal_user_connections KILL "$user"
+    done
+}
 
 # Function to check if a service is running
 service_check() {
@@ -16,15 +64,18 @@ service_check sshd
 # Check if Nginx is running
 service_check nginx
 
-# Check if the authorized_keys has been modified
-if [ -e /tmp/authorized_keys_checksum ] && [ -e /config/authorized_keys ]; then
-    SHUTDOWN_LATCH=/tmp/authorized_keys_shutdown
-    CURRENT_CHECKSUM=$(md5sum /config/authorized_keys | cut -d ' ' -f 1)
-    ORIGINAL_CHECKSUM=$(cat /tmp/authorized_keys_checksum)
-    if [ "$CURRENT_CHECKSUM" != "$ORIGINAL_CHECKSUM" ]; then
+# Check if the authorized keys have semantically changed
+if [ -e "$NORMALIZED_KEYS" ] && [ -e /config/authorized_keys ]; then
+    CURRENT_KEYS=$(mktemp)
+    trap 'rm -f "$CURRENT_KEYS"' EXIT
+    if normalize_keys /config/authorized_keys "$CURRENT_KEYS" &&
+        ! cmp -s "$NORMALIZED_KEYS" "$CURRENT_KEYS"; then
         touch "$SHUTDOWN_LATCH"
     fi
     if [ -e "$SHUTDOWN_LATCH" ]; then
+        if mkdir "$REVOCATION_LOCK" 2>/dev/null; then
+            terminate_revoked_user_connections "$CURRENT_KEYS"
+        fi
         case "$CONFIG_CHANGE_MODE" in
             restart)
                 echo "The /config/authorized_keys file has been modified."

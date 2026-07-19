@@ -20,6 +20,17 @@ wait_for_file() {
     done
     return 1
 }
+wait_for_exit() {
+    local pid=$1
+    local attempts=${2:-10}
+    local attempt
+
+    for ((attempt = 0; attempt < attempts; attempt++)); do
+        kill -0 "$pid" 2>/dev/null || return 0
+        sleep 1
+    done
+    return 1
+}
 
 key_dir=/workspace/ssh_config
 state_dir=/workspace/test_state
@@ -145,9 +156,9 @@ for port in 19001 19002 19003 19004; do
 done
 pass "Reordering authorized keys does not revoke any users"
 
-wait_for_file "$state_dir/restart-unhealthy" ||
-    fail "Restart mode did not immediately request a restart"
-pass "Restart mode immediately requests a restart after authorized keys change"
+[ ! -e "$state_dir/restart-unhealthy" ] ||
+    fail "Reordering authorized keys requested a restart"
+pass "Semantic key comparison ignores key reordering"
 
 info "Trying to forward alice to bob's upstream port"
 ssh "${ssh_options[@]}" -i "$key_dir/alice" -N \
@@ -162,18 +173,34 @@ wait "$unauthorized_pid" 2>/dev/null || true
 unauthorized_pid=
 pass "SSH rejects forwarding to unauthorized ports"
 
-info "Changing authorized keys while SSH connections are active"
+info "Removing one of alice's authorized keys"
 grep -Fvx -- "$(cat "$key_dir/alice_second.pub")" \
     "$key_dir/authorized_keys" > "$key_dir/authorized_keys.new"
 mv "$key_dir/authorized_keys.new" "$key_dir/authorized_keys"
-sleep 2
-for pid in "$alice_pid" "$alice_second_pid" "$bob_pid" "$charlie_pid"; do
-    kill -0 "$pid" 2>/dev/null ||
-        fail "Changing authorized keys closed an existing connection"
-done
+
+wait_for_exit "$alice_pid" 10 ||
+    fail "Alice's first connection remained open after her second key was removed"
+wait_for_exit "$alice_second_pid" 10 ||
+    fail "Alice's second connection remained open after its key was removed"
+alice_pid=
+alice_second_pid=
+pass "Revoking one of multiple keys closes all sessions for that user"
+
+kill -0 "$bob_pid" 2>/dev/null ||
+    fail "Removing alice's key also closed bob's connection"
+kill -0 "$charlie_pid" 2>/dev/null ||
+    fail "Removing alice's key also closed charlie's connection"
+curl --fail --silent --max-time 2 http://localhost:19002/ >/dev/null ||
+    fail "Bob's tunnel stopped proxying after alice's key was removed"
+pass "Other users remain connected while shutdown drains"
+
 [ ! -e "$state_dir/unhealthy" ] ||
     fail "Health check failed while SSH connections were active"
 pass "Health check stays healthy while SSH connections drain"
+
+wait_for_file "$state_dir/restart-unhealthy" ||
+    fail "Restart mode did not immediately request a restart"
+pass "Restart mode immediately requests a restart after a semantic key change"
 
 info "Restoring authorized keys after shutdown was requested"
 cp "$key_dir/authorized_keys.original" "$key_dir/authorized_keys"
