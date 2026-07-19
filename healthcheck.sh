@@ -58,7 +58,12 @@ remove_configured_users() {
 
         echo "Removing configuration for $user before restart."
         rm -f "/etc/nginx/conf.d/$user.conf"
-        deluser --remove-home "$user" 2>/dev/null || rm -rf "/home/$user"
+        if awk -F: -v user="$user" '$1 == user { found = 1 } END { exit !found }' \
+            /etc/passwd && ! deluser "$user"; then
+            echo "Could not remove user $user; restart aborted." >&2
+            return 1
+        fi
+        rm -rf "/home/$user"
     done
 }
 
@@ -95,7 +100,7 @@ if [ -e "$NORMALIZED_KEYS" ] && [ -e /config/authorized_keys ]; then
         case "$CONFIG_CHANGE_MODE" in
             restart)
                 echo "The /config/authorized_keys file has been modified."
-                remove_configured_users
+                remove_configured_users || exit 1
                 kill -TERM 1
                 exit 1
                 ;;
