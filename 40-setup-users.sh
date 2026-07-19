@@ -4,6 +4,7 @@ echo "Writing SSHD Config and NGINX Configs for Users"
 
 base_port=38022
 sshd_config="/etc/ssh/sshd_config"
+configured_users=" "
 
 # Base SSHD Config
 sshdConfig="
@@ -56,20 +57,27 @@ setup_user() {
     # Normalize by replacing '.' with '-' and '/' with '_' in user tag
     user=$(echo "$user" | sed 's/\./-/g' | sed 's/\//_/g')
 
+    case "$configured_users" in
+        *" $user "*)
+            echo "Adding extra SSH pubkey for $user."
+            echo "$key" >> "/home/$user/.ssh/authorized_keys"
+            return
+            ;;
+    esac
+    configured_users="${configured_users}${user} "
+    port=$((base_port++))
+
     # User home dir
     home_dir="/home/$user"
 
     # Check if the user already exists
     if grep -q "^$user:" /etc/passwd; then
-        echo "Adding extra SSH pubkey for $user."
-        echo "$key" >> "$home_dir/.ssh/authorized_keys"
-        return
+        echo "Refreshing configuration for $user."
+    else
+        # Create user
+        adduser --disabled-password --gecos "" "$user"
+        passwd -u "$user"
     fi
-
-    # Create user
-    adduser --disabled-password --gecos "" "$user"
-    passwd -u "$user"
-    port=$((base_port++))
 
     # Create user home directory if it doesn't exist
     mkdir -p "$home_dir/.ssh"

@@ -91,7 +91,7 @@ func (c *rolloutController) run(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-c.trigger:
-			if !waitForDelay(ctx, c.config.rolloutDelay) {
+			if !waitForQuietPeriod(ctx, c.config.rolloutDelay, c.trigger) {
 				return nil
 			}
 			if err := c.reconcile(ctx); err != nil {
@@ -101,6 +101,27 @@ func (c *rolloutController) run(ctx context.Context) error {
 				}
 				c.enqueue(nil)
 			}
+		}
+	}
+}
+
+func waitForQuietPeriod(ctx context.Context, delay time.Duration, trigger <-chan struct{}) bool {
+	if delay <= 0 {
+		return true
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-trigger:
+			if !timer.Stop() {
+				<-timer.C
+			}
+			timer.Reset(delay)
+		case <-timer.C:
+			return true
 		}
 	}
 }
