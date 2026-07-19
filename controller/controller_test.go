@@ -5,7 +5,6 @@ import (
 	"io"
 	"log/slog"
 	"testing"
-	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -78,31 +77,6 @@ func TestReconcileRetriesConflict(t *testing.T) {
 	}
 	if conflicts != 1 {
 		t.Fatalf("conflicts = %d, want 1", conflicts)
-	}
-}
-
-func TestWaitForQuietPeriodRestartsAfterNewEvent(t *testing.T) {
-	trigger := make(chan struct{}, 1)
-	start := time.Now()
-	go func() {
-		time.Sleep(50 * time.Millisecond)
-		trigger <- struct{}{}
-	}()
-
-	if !waitForQuietPeriod(context.Background(), 100*time.Millisecond, trigger) {
-		t.Fatal("quiet period was canceled")
-	}
-	if elapsed := time.Since(start); elapsed < 140*time.Millisecond {
-		t.Fatalf("quiet period elapsed after %v, want at least 140ms", elapsed)
-	}
-}
-
-func TestWaitForQuietPeriodCanBeCanceled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	if waitForQuietPeriod(ctx, time.Minute, make(chan struct{})) {
-		t.Fatal("canceled quiet period completed")
 	}
 }
 

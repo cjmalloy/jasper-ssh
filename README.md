@@ -23,10 +23,9 @@ When the mounted `/config/authorized_keys` changes, the health check compares
 the normalized key set, so reordering keys does not request a restart. If a user
 loses any key, all of that user's existing sessions are terminated. Shutdown
 remains latched even if the original file contents are restored. In the default
-`restart` mode, the health check sends `SIGTERM` to the container and fails so
-Docker Compose can restart it and load the new keys. In `drain` mode, it
-continues to pass while other established SSH connections remain and fails once
-they close.
+`restart` mode, the health check fails immediately so the orchestrator can
+replace the container and load the new keys. In `drain` mode, it continues to
+pass while other established SSH connections remain and fails once they close.
 
 ## Kubernetes rollout controller
 
@@ -43,7 +42,7 @@ patch.
 | `AUTHORIZED_KEYS_CONFIGMAP_NAME` | Authorized-keys ConfigMap to watch. Required. | |
 | `SSH_DEPLOYMENT_NAME` | jasper-ssh Deployment to patch. Required. | |
 | `ROLLOUT_ANNOTATION_KEY` | Pod-template annotation used to request rollouts. | `jasper-ssh.cjmalloy.com/authorized-keys-resource-version` |
-| `ROLLOUT_DELAY` | Quiet period after the latest ConfigMap event before reconciliation, allowing projected keys to reach existing pods first. | `1m` |
+| `ROLLOUT_DELAY` | Optional non-negative Go duration before reconciliation, allowing projected keys to reach existing pods first. | `0s` |
 | `HEALTH_ADDRESS` | Controller health server listen address. | `:8080` |
 
 The controller exposes `/livez` and `/readyz` on its health address and handles
@@ -51,15 +50,6 @@ The controller exposes `/livez` and `/readyz` on its health address and handles
 `/config/authorized_keys`. An example namespaced ServiceAccount, Role, and
 RoleBinding is available at `controller/rbac.yaml`; update its resource
 names to match your ConfigMap and Deployment.
-
-The controller cannot directly confirm which ConfigMap resource version an
-existing pod has observed: projected volumes expose file contents but not that
-version, and pods do not report an acknowledgment through the Kubernetes API.
-It therefore waits for a conservative quiet period after the latest ConfigMap
-event before requesting a rollout. Rapid updates reset the full delay so the
-latest projection always receives the configured propagation window. Increase
-`ROLLOUT_DELAY` if the cluster's kubelet sync and ConfigMap cache intervals can
-exceed one minute.
 
 ## Tests
 

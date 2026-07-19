@@ -92,7 +92,7 @@ func loadConfig() (controllerConfig, string, error) {
 		return controllerConfig{}, "", fmt.Errorf("SSH_DEPLOYMENT_NAME is required")
 	}
 
-	delay := envOrDefault("ROLLOUT_DELAY", "1m")
+	delay := envOrDefault("ROLLOUT_DELAY", "0s")
 	rolloutDelay, err := time.ParseDuration(delay)
 	if err != nil || rolloutDelay < 0 {
 		return controllerConfig{}, "", fmt.Errorf("ROLLOUT_DELAY must be a non-negative Go duration")

@@ -83,7 +83,6 @@ if [ -e "$NORMALIZED_KEYS" ] && [ -e /config/authorized_keys ]; then
         case "$CONFIG_CHANGE_MODE" in
             restart)
                 echo "The /config/authorized_keys file has been modified."
-                kill -TERM 1
                 exit 1
                 ;;
             drain) ;;
