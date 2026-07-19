@@ -172,6 +172,7 @@ pass "Health check stays healthy while SSH connections drain"
 
 info "Restoring authorized keys after shutdown was requested"
 cp "$key_dir/authorized_keys.original" "$key_dir/authorized_keys"
+# Clear the observer marker so only a latched healthcheck can recreate it.
 rm -f "$state_dir/restart-unhealthy"
 for _ in {1..10}; do
     [ -e "$state_dir/restart-unhealthy" ] && break
