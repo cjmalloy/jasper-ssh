@@ -173,7 +173,6 @@ fi
 /usr/sbin/sshd -e -D &
 SSHD_PID=$!
 echo "sshd started with PID $SSHD_PID"
-/restart-on-key-change.sh &
 # Trap both SIGQUIT and SIGTERM and forward as SIGQUIT to sshd
 trap 'echo "Received SIGQUIT, forwarding to sshd (PID $SSHD_PID)"; kill -s SIGQUIT $SSHD_PID' SIGQUIT
 trap 'echo "Received SIGTERM, forwarding to sshd (PID $SSHD_PID)"; kill -s SIGQUIT $SSHD_PID' SIGTERM

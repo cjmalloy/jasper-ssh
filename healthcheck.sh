@@ -83,6 +83,7 @@ if [ -e "$NORMALIZED_KEYS" ] && [ -e /config/authorized_keys ]; then
         case "$CONFIG_CHANGE_MODE" in
             restart)
                 echo "The /config/authorized_keys file has been modified."
+                kill -TERM 1
                 exit 1
                 ;;
             drain) ;;
@@ -97,6 +98,7 @@ if [ -e "$NORMALIZED_KEYS" ] && [ -e /config/authorized_keys ]; then
         ' /proc/net/tcp /proc/net/tcp6 2>/dev/null)
         if [ "$CONNECTION_COUNT" -eq 0 ]; then
             echo "The /config/authorized_keys file has been modified."
+            kill -TERM 1
             exit 1
         fi
         echo "The /config/authorized_keys file has been modified; draining $CONNECTION_COUNT SSH connection(s)."

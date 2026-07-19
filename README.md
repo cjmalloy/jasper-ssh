@@ -15,7 +15,7 @@ Create an SSH authenticated [jasper](https://github.com/cjmalloy/jasper) proxy
 | `TAG_READ_ACCESS`    | Sets `Tag-Read-Access` header. Requires upstream server to have `JASPER_ALLOW_AUTH_HEADERS` set.                                                                                                               |                          |
 | `TAG_WRITE_ACCESS`   | Sets `Tag-Write-Access` header. Requires upstream server to have `JASPER_ALLOW_AUTH_HEADERS` set.                                                                                                              |                          |
 | `SSHD_LOG_LEVEL`     | Sets the LogLevel in sshd_config.                                                                                                                                                                              | INFO                     |
-| `CONFIG_CHANGE_MODE` | Handles a semantic `/config/authorized_keys` change: `restart` exits the server immediately; `drain` waits for established SSH connections to close before failing health checks.                              | `restart`                |
+| `CONFIG_CHANGE_MODE` | Handles a semantic `/config/authorized_keys` change: `restart` exits the server immediately; `drain` waits for established SSH connections to close before exiting.                                            | `restart`                |
 
 ## Authorized-key changes
 
@@ -25,7 +25,8 @@ loses any key, all of that user's existing sessions are terminated. Shutdown
 remains latched even if the original file contents are restored. In the default
 `restart` mode, the server exits immediately so a container restart policy can
 replace it and load the new keys. In `drain` mode, its health check continues to
-pass while other established SSH connections remain and fails once they close.
+pass while other established SSH connections remain, then exits the server once
+they close.
 
 ## Kubernetes rollout controller
 

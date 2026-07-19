@@ -84,7 +84,7 @@ services:
       http-backend:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "pgrep sshd >/dev/null && pgrep nginx >/dev/null"]
+      test: ["CMD", "/healthcheck.sh"]
       interval: 1s
       timeout: 5s
       retries: 20
