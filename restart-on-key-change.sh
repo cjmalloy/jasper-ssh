@@ -6,7 +6,11 @@
 baseline_keys=$(mktemp)
 current_keys=$(mktemp)
 trap 'rm -f "$baseline_keys" "$current_keys"' EXIT
-cp /tmp/authorized_keys.normalized "$baseline_keys"
+if ! cp /tmp/authorized_keys.normalized "$baseline_keys"; then
+    echo "Unable to initialize the authorized-key watcher." >&2
+    kill -TERM 1
+    exit 1
+fi
 
 while sleep 1; do
     sed 's/#.*//;s/^[	 ]*//;s/[	 ]*$//;/^$/d' /config/authorized_keys |
