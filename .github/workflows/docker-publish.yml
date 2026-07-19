@@ -20,11 +20,13 @@ jobs:
       matrix:
         include:
           - component: jasper-ssh
+            context: .
             dockerfile: Dockerfile
             image_suffix: ""
             package_name: jasper-ssh
           - component: controller
-            dockerfile: Dockerfile.controller
+            context: controller
+            dockerfile: controller/Dockerfile
             image_suffix: "-controller"
             package_name: jasper-ssh-controller
     permissions:
@@ -81,7 +83,7 @@ jobs:
         id: build-and-push
         uses: docker/build-push-action@v7
         with:
-          context: .
+          context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true

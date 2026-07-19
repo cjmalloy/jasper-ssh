@@ -44,7 +44,7 @@ patch.
 The controller exposes `/livez` and `/readyz` on its health address and handles
 `SIGINT` and `SIGTERM` gracefully. Mount the watched ConfigMap at
 `/config/authorized_keys`. An example namespaced ServiceAccount, Role, and
-RoleBinding is available at `examples/controller-rbac.yaml`; update its resource
+RoleBinding is available at `controller/rbac.yaml`; update its resource
 names to match your ConfigMap and Deployment.
 
 ## Integration tests

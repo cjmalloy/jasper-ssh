@@ -1,4 +1,4 @@
-module github.com/cjmalloy/jasper-ssh
+module github.com/cjmalloy/jasper-ssh/controller
 
 go 1.24.13
 

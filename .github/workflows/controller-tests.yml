@@ -17,11 +17,14 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
+          go-version-file: controller/go.mod
           cache: true
       - name: Test
-        run: go test ./cmd/controller
+        run: go test ./...
+        working-directory: controller
       - name: Vet
-        run: go vet ./cmd/controller
+        run: go vet ./...
+        working-directory: controller
       - name: Build
-        run: go build ./cmd/controller
+        run: go build ./...
+        working-directory: controller
