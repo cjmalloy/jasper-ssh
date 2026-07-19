@@ -15,7 +15,3 @@ docker compose -f compose.test.yml up --build --no-deps \
   --abort-on-container-exit --exit-code-from test-runner test-runner
 docker compose -f compose.test.yml down -v
 ```
-
-The troubleshooting also tried Docker daemon DNS changes, a lower Docker MTU,
-and switching Alpine repositories to HTTP. Those were not the solution: do not
-persist DNS or MTU changes, and do not weaken repository transport to HTTP.
