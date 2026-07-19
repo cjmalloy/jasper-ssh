@@ -50,6 +50,18 @@ terminate_revoked_user_connections() {
     done
 }
 
+remove_configured_users() {
+    for user_keys in /home/*/.ssh/authorized_keys; do
+        [ -f "$user_keys" ] || continue
+        user=${user_keys#/home/}
+        user=${user%%/*}
+
+        echo "Removing configuration for $user before restart."
+        rm -f "/etc/nginx/conf.d/$user.conf"
+        deluser --remove-home "$user" 2>/dev/null || rm -rf "/home/$user"
+    done
+}
+
 # Function to check if a service is running
 service_check() {
     if ! pgrep "$1" > /dev/null; then
@@ -83,6 +95,7 @@ if [ -e "$NORMALIZED_KEYS" ] && [ -e /config/authorized_keys ]; then
         case "$CONFIG_CHANGE_MODE" in
             restart)
                 echo "The /config/authorized_keys file has been modified."
+                remove_configured_users
                 kill -TERM 1
                 exit 1
                 ;;
