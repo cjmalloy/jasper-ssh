@@ -64,6 +64,7 @@ services:
 
   target-server-restart:
     build: .
+    restart: unless-stopped
     environment:
       LOCAL_ORIGIN: "@test-origin"
       READ_ACCESS: test-read
@@ -83,7 +84,7 @@ services:
       http-backend:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "/healthcheck.sh || { touch /test-state/restart-unhealthy; exit 1; }"]
+      test: ["CMD-SHELL", "pgrep sshd >/dev/null && pgrep nginx >/dev/null"]
       interval: 1s
       timeout: 5s
       retries: 20

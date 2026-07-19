@@ -40,6 +40,7 @@ alice_pid=
 alice_second_pid=
 bob_pid=
 charlie_pid=
+restart_bob_pid=
 unauthorized_pid=
 summary=()
 summary_start_delimiter="=== TEST SUMMARY START ==="
@@ -50,6 +51,7 @@ cleanup() {
     [ -z "$alice_second_pid" ] || kill "$alice_second_pid" 2>/dev/null || true
     [ -z "$bob_pid" ] || kill "$bob_pid" 2>/dev/null || true
     [ -z "$charlie_pid" ] || kill "$charlie_pid" 2>/dev/null || true
+    [ -z "$restart_bob_pid" ] || kill "$restart_bob_pid" 2>/dev/null || true
     [ -z "$unauthorized_pid" ] || kill "$unauthorized_pid" 2>/dev/null || true
 }
 
@@ -115,7 +117,10 @@ bob_pid=$!
 ssh "${ssh_options[@]}" -i "$key_dir/charlie" -N \
     -L 19003:localhost:38024 custom-origin_charlie@target-server &
 charlie_pid=$!
-for port in 19001 19002 19003 19004; do
+ssh "${ssh_options[@]}" -i "$key_dir/bob" -N \
+    -L 19102:localhost:38023 bob@target-server-restart &
+restart_bob_pid=$!
+for port in 19001 19002 19003 19004 19102; do
     for _ in {1..10}; do
         curl --fail --silent --max-time 2 "http://localhost:$port/" >/dev/null && break
         sleep 1
@@ -146,7 +151,8 @@ awk '{ keys[NR] = $0 } END { for (line = NR; line > 0; line--) print keys[line] 
 mv "$key_dir/authorized_keys.new" "$key_dir/authorized_keys"
 sleep 3
 
-for pid in "$alice_pid" "$alice_second_pid" "$bob_pid" "$charlie_pid"; do
+for pid in "$alice_pid" "$alice_second_pid" "$bob_pid" "$charlie_pid" \
+    "$restart_bob_pid"; do
     kill -0 "$pid" 2>/dev/null ||
         fail "Reordering authorized keys closed an existing connection"
 done
@@ -156,8 +162,6 @@ for port in 19001 19002 19003 19004; do
 done
 pass "Reordering authorized keys does not revoke any users"
 
-[ ! -e "$state_dir/restart-unhealthy" ] ||
-    fail "Reordering authorized keys requested a restart"
 pass "Semantic key comparison ignores key reordering"
 
 info "Trying to forward alice to bob's upstream port"
@@ -186,6 +190,25 @@ alice_pid=
 alice_second_pid=
 pass "Revoking one of multiple keys closes all sessions for that user"
 
+wait_for_exit "$restart_bob_pid" 10 ||
+    fail "Restart mode did not exit the server after a key change"
+restart_bob_pid=
+for _ in {1..20}; do
+    ssh "${ssh_options[@]}" -i "$key_dir/bob" -N \
+        -L 19102:localhost:38023 bob@target-server-restart &
+    restart_bob_pid=$!
+    sleep 1
+    if curl --fail --silent --max-time 2 http://localhost:19102/ >/dev/null; then
+        break
+    fi
+    kill "$restart_bob_pid" 2>/dev/null || true
+    wait "$restart_bob_pid" 2>/dev/null || true
+    restart_bob_pid=
+done
+curl --fail --silent --max-time 2 http://localhost:19102/ >/dev/null ||
+    fail "Docker Compose did not restart the exited server"
+pass "Restart mode exits the server and Docker Compose restarts it"
+
 kill -0 "$bob_pid" 2>/dev/null ||
     fail "Removing alice's key also closed bob's connection"
 kill -0 "$charlie_pid" 2>/dev/null ||
@@ -209,19 +232,11 @@ pass "Later key removals revoke their users during an existing drain"
     fail "Health check failed while SSH connections were active"
 pass "Health check stays healthy while SSH connections drain"
 
-wait_for_file "$state_dir/restart-unhealthy" ||
-    fail "Restart mode did not immediately request a restart"
-pass "Restart mode immediately requests a restart after a semantic key change"
-
 info "Restoring authorized keys after shutdown was requested"
 cp "$key_dir/authorized_keys.original" "$key_dir/authorized_keys"
-# Clear the observer marker so only a latched healthcheck can recreate it.
-rm -f "$state_dir/restart-unhealthy"
-wait_for_file "$state_dir/restart-unhealthy" ||
-    fail "Restoring authorized keys cancelled restart mode shutdown"
 [ ! -e "$state_dir/unhealthy" ] ||
     fail "Restoring authorized keys aborted connection draining"
-pass "Restoring authorized keys does not cancel latched shutdown"
+pass "Restoring authorized keys does not cancel latched drain mode"
 
 cleanup
 alice_pid=
