@@ -15,15 +15,30 @@ Create an SSH authenticated [jasper](https://github.com/cjmalloy/jasper) proxy
 | `TAG_READ_ACCESS`    | Sets `Tag-Read-Access` header. Requires upstream server to have `JASPER_ALLOW_AUTH_HEADERS` set.                                                                                                               |                          |
 | `TAG_WRITE_ACCESS`   | Sets `Tag-Write-Access` header. Requires upstream server to have `JASPER_ALLOW_AUTH_HEADERS` set.                                                                                                              |                          |
 | `SSHD_LOG_LEVEL`     | Sets the LogLevel in sshd_config.                                                                                                                                                                              | INFO                     |
-| `CONFIG_CHANGE_MODE` | Controls health after `/config/authorized_keys` changes: `restart` fails immediately; `drain` waits for established SSH connections to close.                                                                | `restart`                |
+| `CONFIG_CHANGE_MODE` | Controls lifecycle behavior after a semantic change to `/config/authorized_keys`: `restart` for Docker Compose or `drain` for Kubernetes.                                                                      | `restart`                |
 
 ## Authorized-key changes
 
-When the mounted `/config/authorized_keys` checksum changes, shutdown remains
-latched even if the original file contents are restored. In the default
-`restart` mode, the health check fails immediately so the orchestrator can
-replace the container and load the new keys. In `drain` mode, it continues to
-pass while established SSH connections remain and fails once they close.
+When the mounted `/config/authorized_keys` changes, jasper-ssh compares the
+normalized set of keys rather than the file checksum. Reordering keys therefore
+does not trigger a rollout. If a key is removed, every session belonging to that
+key's user is terminated immediately. The SSH listener then stops accepting new
+connections while sessions for users whose access remains authorized drain.
+
+The change mode controls orchestration behavior:
+
+* `restart` preserves the existing behavior and is the default. The container
+  exits after sessions drain; configure Docker Compose with
+  `restart: unless-stopped` to start it again with the new keys.
+* `drain` is intended for Kubernetes. The container becomes unready, remains
+  live while sessions drain, and exits when no sessions remain. A `SIGTERM`
+  starts the same drain process. Kubernetes bounds it with the pod's
+  `terminationGracePeriodSeconds`.
+
+For Kubernetes exec probes, use `/healthcheck.sh ready` as the readiness probe
+and `/healthcheck.sh live` as the liveness probe. The readiness probe fails once
+draining starts; the liveness probe continues to pass while authorized sessions
+remain.
 
 ## Kubernetes rollout controller
 
@@ -44,9 +59,11 @@ patch.
 | `HEALTH_ADDRESS` | Controller health server listen address. | `:8080` |
 
 The controller exposes `/livez` and `/readyz` on its health address and handles
-`SIGINT` and `SIGTERM` gracefully. Mount the watched ConfigMap at
-`/config/authorized_keys`. An example namespaced ServiceAccount, Role, and
-RoleBinding is available at `controller/rbac.yaml`; update its resource
+`SIGINT` and `SIGTERM` gracefully. Configure jasper-ssh pods with
+`CONFIG_CHANGE_MODE=drain`, mount the watched ConfigMap at
+`/config/authorized_keys`, and set a termination grace period long enough for
+the maximum desired session drain. An example namespaced ServiceAccount, Role,
+and RoleBinding is available at `controller/rbac.yaml`; update its resource
 names to match your ConfigMap and Deployment.
 
 ## Tests
@@ -55,12 +72,13 @@ Run the jasper-ssh Bash integration suite with Docker Compose:
 
 ```sh
 docker compose -f compose.test.yml up --build --wait \
-  keygen http-backend config-tester target-server target-server-restart
+  keygen http-backend config-tester target-server target-server-drain
 docker compose -f compose.test.yml up --build --no-deps \
   --abort-on-container-exit --exit-code-from test-runner test-runner
 docker compose -f compose.test.yml down -v
 ```
 
-The jasper-ssh suite verifies the headers sent to the upstream service and both
-restart and drain health-check behavior after an authorized-key change.
+The jasper-ssh suite verifies the headers sent to the upstream service, semantic
+key comparison, user revocation, restart and drain behavior, and latched
+shutdown.
 Controller tests are separate and run with `go test ./...` from `controller/`.
