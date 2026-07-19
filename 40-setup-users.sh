@@ -148,8 +148,9 @@ if [ -n "$AUTHORIZED_KEYS" ]; then
     process_keys "$AUTHORIZED_KEYS"
 elif [ -e /config/authorized_keys ]; then
     echo "Authorized Keys file mounted"
+    AUTHORIZED_KEYS_CHECKSUM=$(md5sum /config/authorized_keys | cut -d ' ' -f 1)
+    echo "$AUTHORIZED_KEYS_CHECKSUM" > /tmp/authorized_keys_checksum
     process_keys "$(cat /config/authorized_keys)"
-    /lifecycle.sh initialize
 else
     echo "No Authorized Keys" >&2
     exit 1
@@ -171,9 +172,7 @@ fi
 
 /usr/sbin/sshd -e -D &
 SSHD_PID=$!
-echo "$SSHD_PID" > /tmp/sshd.pid
 echo "sshd started with PID $SSHD_PID"
-
-if [ -e /config/authorized_keys ]; then
-    /lifecycle.sh watch &
-fi
+# Trap both SIGQUIT and SIGTERM and forward as SIGQUIT to sshd
+trap 'echo "Received SIGQUIT, forwarding to sshd (PID $SSHD_PID)"; kill -s SIGQUIT $SSHD_PID' SIGQUIT
+trap 'echo "Received SIGTERM, forwarding to sshd (PID $SSHD_PID)"; kill -s SIGQUIT $SSHD_PID' SIGTERM
