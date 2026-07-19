@@ -1,5 +1,7 @@
 #!/bin/sh
 
+CONFIG_CHANGE_MODE=${CONFIG_CHANGE_MODE:-restart}
+
 # Function to check if a service is running
 service_check() {
     if ! pgrep "$1" > /dev/null; then
@@ -23,7 +25,7 @@ if [ -e /tmp/authorized_keys_checksum ] && [ -e /config/authorized_keys ]; then
         touch "$SHUTDOWN_LATCH"
     fi
     if [ -e "$SHUTDOWN_LATCH" ]; then
-        if [ "${CONFIG_CHANGE_MODE:-restart}" != "drain" ]; then
+        if [ "$CONFIG_CHANGE_MODE" != "drain" ]; then
             echo "The /config/authorized_keys file has been modified."
             exit 1
         fi
