@@ -148,6 +148,7 @@ if [ -n "$AUTHORIZED_KEYS" ]; then
     process_keys "$AUTHORIZED_KEYS"
 elif [ -e /config/authorized_keys ]; then
     echo "Authorized Keys file mounted"
+    rm -f /tmp/authorized_keys_shutdown
     sed 's/#.*//;s/^[	 ]*//;s/[	 ]*$//;/^$/d' /config/authorized_keys |
         LC_ALL=C sort -u > /tmp/authorized_keys.normalized
     process_keys "$(cat /config/authorized_keys)"
