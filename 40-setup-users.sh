@@ -72,7 +72,9 @@ setup_user() {
 
     # Check if the user already exists
     if grep -q "^$user:" /etc/passwd; then
-        echo "Refreshing configuration for $user."
+        echo "Adding extra SSH pubkey for $user."
+        echo "$key" >> "$home_dir/.ssh/authorized_keys"
+        return
     else
         # Create user
         adduser --disabled-password --gecos "" "$user"
