@@ -25,10 +25,17 @@ if [ -e /tmp/authorized_keys_checksum ] && [ -e /config/authorized_keys ]; then
         touch "$SHUTDOWN_LATCH"
     fi
     if [ -e "$SHUTDOWN_LATCH" ]; then
-        if [ "$CONFIG_CHANGE_MODE" != "drain" ]; then
-            echo "The /config/authorized_keys file has been modified."
-            exit 1
-        fi
+        case "$CONFIG_CHANGE_MODE" in
+            restart)
+                echo "The /config/authorized_keys file has been modified."
+                exit 1
+                ;;
+            drain) ;;
+            *)
+                echo "CONFIG_CHANGE_MODE must be restart or drain."
+                exit 1
+                ;;
+        esac
         CONNECTION_COUNT=$(awk '
             $2 ~ /:0016$/ && $4 == "01" { count++ }
             END { print count + 0 }

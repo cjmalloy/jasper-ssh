@@ -11,6 +11,15 @@ fail() {
     summary+=("[FAIL] $*")
     exit 1
 }
+wait_for_file() {
+    local path=$1
+    local attempt
+    for ((attempt = 0; attempt < 10; attempt++)); do
+        [ -e "$path" ] && return 0
+        sleep 1
+    done
+    return 1
+}
 
 key_dir=/workspace/ssh_config
 state_dir=/workspace/test_state
@@ -136,11 +145,7 @@ for port in 19001 19002 19003 19004; do
 done
 pass "Reordering authorized keys does not revoke any users"
 
-for _ in {1..10}; do
-    [ -e "$state_dir/restart-unhealthy" ] && break
-    sleep 1
-done
-[ -e "$state_dir/restart-unhealthy" ] ||
+wait_for_file "$state_dir/restart-unhealthy" ||
     fail "Restart mode did not immediately request a restart"
 pass "Restart mode immediately requests a restart after authorized keys change"
 
@@ -174,11 +179,7 @@ info "Restoring authorized keys after shutdown was requested"
 cp "$key_dir/authorized_keys.original" "$key_dir/authorized_keys"
 # Clear the observer marker so only a latched healthcheck can recreate it.
 rm -f "$state_dir/restart-unhealthy"
-for _ in {1..10}; do
-    [ -e "$state_dir/restart-unhealthy" ] && break
-    sleep 1
-done
-[ -e "$state_dir/restart-unhealthy" ] ||
+wait_for_file "$state_dir/restart-unhealthy" ||
     fail "Restoring authorized keys cancelled restart mode shutdown"
 [ ! -e "$state_dir/unhealthy" ] ||
     fail "Restoring authorized keys aborted connection draining"
@@ -190,10 +191,6 @@ alice_second_pid=
 bob_pid=
 charlie_pid=
 
-for _ in {1..10}; do
-    [ -e "$state_dir/unhealthy" ] && break
-    sleep 1
-done
-[ -e "$state_dir/unhealthy" ] ||
+wait_for_file "$state_dir/unhealthy" ||
     fail "Health check remained healthy after SSH connections drained"
 pass "Health check requests restart after SSH connections drain"
