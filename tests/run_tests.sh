@@ -16,7 +16,6 @@ key_dir=/workspace/ssh_config
 state_dir=/workspace/test_state
 expected_token=test-token
 expected_authorization=$(printf '%s %s' Bearer "$expected_token")
-healthcheck_settle_seconds=2
 alice_pid=
 alice_second_pid=
 bob_pid=
@@ -174,7 +173,10 @@ pass "Health check stays healthy while SSH connections drain"
 info "Restoring authorized keys after shutdown was requested"
 cp "$key_dir/authorized_keys.original" "$key_dir/authorized_keys"
 rm -f "$state_dir/restart-unhealthy"
-sleep "$healthcheck_settle_seconds"
+for _ in {1..10}; do
+    [ -e "$state_dir/restart-unhealthy" ] && break
+    sleep 1
+done
 [ -e "$state_dir/restart-unhealthy" ] ||
     fail "Restoring authorized keys cancelled restart mode shutdown"
 [ ! -e "$state_dir/unhealthy" ] ||
