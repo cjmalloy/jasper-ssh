@@ -16,7 +16,7 @@ signal_user_connections() {
     escaped_user=$(printf '%s' "$user" | sed 's/[][\\.^$*+?{}|()]/\\&/g')
 
     for process_name in sshd sshd-session; do
-        pgrep -f "^${process_name}: ${escaped_user}" 2>/dev/null |
+        pgrep -f "^${process_name}: ${escaped_user}([ @]|$)" 2>/dev/null |
             while IFS= read -r pid; do
                 kill "-$signal" "$pid" 2>/dev/null || true
             done
@@ -71,11 +71,15 @@ if [ -e "$NORMALIZED_KEYS" ] && [ -e /config/authorized_keys ]; then
     if normalize_keys /config/authorized_keys "$CURRENT_KEYS" &&
         ! cmp -s "$NORMALIZED_KEYS" "$CURRENT_KEYS"; then
         touch "$SHUTDOWN_LATCH"
+        if mkdir "$REVOCATION_LOCK" 2>/dev/null; then
+            if ! cmp -s "$NORMALIZED_KEYS" "$CURRENT_KEYS"; then
+                terminate_revoked_user_connections "$CURRENT_KEYS"
+                cp "$CURRENT_KEYS" "$NORMALIZED_KEYS"
+            fi
+            rmdir "$REVOCATION_LOCK"
+        fi
     fi
     if [ -e "$SHUTDOWN_LATCH" ]; then
-        if mkdir "$REVOCATION_LOCK" 2>/dev/null; then
-            terminate_revoked_user_connections "$CURRENT_KEYS"
-        fi
         case "$CONFIG_CHANGE_MODE" in
             restart)
                 echo "The /config/authorized_keys file has been modified."

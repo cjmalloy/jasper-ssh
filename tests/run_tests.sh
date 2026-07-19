@@ -194,6 +194,17 @@ curl --fail --silent --max-time 2 http://localhost:19002/ >/dev/null ||
     fail "Bob's tunnel stopped proxying after alice's key was removed"
 pass "Other users remain connected while shutdown drains"
 
+info "Removing charlie's key during the existing drain"
+grep -Fvx -- "$(cat "$key_dir/charlie.pub")" \
+    "$key_dir/authorized_keys" > "$key_dir/authorized_keys.new"
+mv "$key_dir/authorized_keys.new" "$key_dir/authorized_keys"
+wait_for_exit "$charlie_pid" 10 ||
+    fail "Charlie's connection remained open after a later key removal"
+charlie_pid=
+kill -0 "$bob_pid" 2>/dev/null ||
+    fail "Charlie's later revocation also closed bob's connection"
+pass "Later key removals revoke their users during an existing drain"
+
 [ ! -e "$state_dir/unhealthy" ] ||
     fail "Health check failed while SSH connections were active"
 pass "Health check stays healthy while SSH connections drain"
