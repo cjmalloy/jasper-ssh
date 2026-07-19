@@ -64,11 +64,11 @@ setup_user() {
         echo "Adding extra SSH pubkey for $user."
         echo "$key" >> "$home_dir/.ssh/authorized_keys"
         return
-    else
-        # Create user
-        adduser --disabled-password --gecos "" "$user"
-        passwd -u "$user"
     fi
+
+    # Create user
+    adduser --disabled-password --gecos "" "$user"
+    passwd -u "$user"
     port=$((base_port++))
 
     # Create user home directory if it doesn't exist
