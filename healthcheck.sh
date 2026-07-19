@@ -89,6 +89,7 @@ if [ -e "$NORMALIZED_KEYS" ] && [ -e /config/authorized_keys ]; then
             drain) ;;
             *)
                 echo "CONFIG_CHANGE_MODE must be restart or drain."
+                kill -TERM 1
                 exit 1
                 ;;
         esac
