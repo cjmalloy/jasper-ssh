@@ -6,7 +6,7 @@ SHUTDOWN_LATCH=/tmp/authorized_keys_shutdown
 REVOCATION_LOCK=/tmp/authorized_keys_revocation_started
 
 normalize_keys() {
-    sed 's/#.*//;s/^[	 ]*//;s/[	 ]*$//;/^$/d' "$1" |
+    sed 's/^[	 ]*//;s/[	 ]*$//;/^[	 ]*#/d;/^$/d' "$1" |
         LC_ALL=C sort -u > "$2"
 }
 
