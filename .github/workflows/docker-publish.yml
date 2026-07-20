@@ -15,8 +15,20 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - component: jasper-ssh
+            context: .
+            dockerfile: Dockerfile
+            image_suffix: ""
+            package_name: jasper-ssh
+          - component: controller
+            context: controller
+            dockerfile: controller/Dockerfile
+            image_suffix: "-controller"
+            package_name: jasper-ssh-controller
     permissions:
       pull-requests: write
       contents: read
@@ -57,7 +69,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image_suffix }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -71,13 +83,14 @@ jobs:
         id: build-and-push
         uses: docker/build-push-action@v7
         with:
-          context: .
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
 
       # Sign the resulting Docker image digest
       # This will only write to the public Rekor transparency log when the Docker
@@ -98,8 +111,8 @@ jobs:
         with:
           # language=JavaScript
           script: |
-            const marker = '<!-- docker-publish-comment -->';
-            const body = `${marker}\nBuilt docker image: https://github.com/${{ github.repository }}/pkgs/container/jasper-ssh/pr-${{ github.event.number }}`;
+            const marker = '<!-- docker-publish-${{ matrix.component }}-comment -->';
+            const body = `${marker}\nBuilt ${{ matrix.component }} image: https://github.com/${{ github.repository }}/pkgs/container/${{ matrix.package_name }}/pr-${{ github.event.number }}`;
             const comments = await github.paginate(github.rest.issues.listComments, {
               owner: context.repo.owner,
               repo: context.repo.repo,

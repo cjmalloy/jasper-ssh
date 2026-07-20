@@ -22,7 +22,6 @@ echo "$sshdConfig" > "$sshd_config"
 # Function to create user folder, set up authorized_keys, add sshd_config match user and create nginx server config
 setup_user() {
     key="$1"
-    port=$((base_port++))
 
     # Extract user tag and optional host origin from the key comment
     comment_field=$(echo "$key" | awk '{print $NF}')
@@ -70,6 +69,7 @@ setup_user() {
     # Create user
     adduser --disabled-password --gecos "" "$user"
     passwd -u "$user"
+    port=$((base_port++))
 
     # Create user home directory if it doesn't exist
     mkdir -p "$home_dir/.ssh"
@@ -148,8 +148,10 @@ if [ -n "$AUTHORIZED_KEYS" ]; then
     process_keys "$AUTHORIZED_KEYS"
 elif [ -e /config/authorized_keys ]; then
     echo "Authorized Keys file mounted"
-    AUTHORIZED_KEYS_CHECKSUM=$(md5sum /config/authorized_keys | cut -d ' ' -f 1)
-    echo $AUTHORIZED_KEYS_CHECKSUM > /tmp/authorized_keys_checksum
+    rm -f /tmp/authorized_keys_shutdown
+    rm -rf /tmp/authorized_keys_revocation_started
+    sed 's/^[	 ]*//;s/[	 ]*$//;/^[	 ]*#/d;/^$/d' /config/authorized_keys |
+        LC_ALL=C sort -u > /tmp/authorized_keys.normalized
     process_keys "$(cat /config/authorized_keys)"
 else
     echo "No Authorized Keys" >&2
