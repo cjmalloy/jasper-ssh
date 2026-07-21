@@ -1,6 +1,6 @@
 module github.com/cjmalloy/jasper-ssh/controller
 
-go 1.25.0
+go 1.26.0
 
 require (
 	k8s.io/api v0.34.9
