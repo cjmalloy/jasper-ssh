@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   test:
@@ -20,7 +21,11 @@ jobs:
           go-version-file: controller/go.mod
           cache: true
       - name: Test
-        run: go test ./...
+        id: tests
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          go test ./... 2>&1 | tee test-results.log
         working-directory: controller
       - name: Vet
         run: go vet ./...
@@ -28,3 +33,65 @@ jobs:
       - name: Build
         run: go build ./...
         working-directory: controller
+      - name: Publish test summary
+        if: always()
+        uses: actions/github-script@v9
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+            const passed = process.env.TEST_OUTCOME === 'success';
+            const icon = passed ? '✅' : '❌';
+            const status = passed ? 'passed' : 'failed';
+            const output = fs.existsSync('controller/test-results.log')
+              ? fs.readFileSync('controller/test-results.log', 'utf8')
+              : 'No test output was produced.';
+            const summary = [
+              `## ${icon} Controller tests ${status}`,
+              `<details><summary>Controller test output</summary>\n\n\`\`\`text\n${output}\n\`\`\`\n</details>`,
+            ].join('\n\n');
+
+            await core.summary.addRaw(summary).write();
+            fs.writeFileSync('controller-test-summary.md', summary);
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && always()
+        continue-on-error: true
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- controller-test-results -->';
+            const summary = fs.existsSync('controller-test-summary.md')
+              ? fs.readFileSync('controller-test-summary.md', 'utf8')
+              : '❌ Controller test summary was not generated.';
+            const body = `${marker}\n${summary}`;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(comment =>
+              comment.user?.login === 'github-actions[bot]' && comment.body?.includes(marker)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Fail on test failure
+        if: steps.tests.outcome != 'success'
+        run: exit 1
