@@ -25,7 +25,7 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          go test ./... 2>&1 | tee test-results.log
+          go test -v ./... 2>&1 | tee test-results.log
         working-directory: controller
       - name: Vet
         run: go vet ./...
@@ -47,8 +47,22 @@ jobs:
             const output = fs.existsSync('controller/test-results.log')
               ? fs.readFileSync('controller/test-results.log', 'utf8')
               : 'No test output was produced.';
+            const tests = [...output.matchAll(/^--- (PASS|FAIL): (\S+) \(([^)]+)\)$/gm)];
+            const passedCount = tests.filter(([, result]) => result === 'PASS').length;
+            const failedCount = tests.filter(([, result]) => result === 'FAIL').length;
+            const results = tests.length
+              ? [
+                  `**${tests.length} tests** · ${passedCount} passed · ${failedCount} failed`,
+                  '| Test | Result | Duration |',
+                  '| --- | --- | ---: |',
+                  ...tests.map(([, result, name, duration]) =>
+                    `| \`${name}\` | ${result === 'PASS' ? '✅ Passed' : '❌ Failed'} | ${duration} |`
+                  ),
+                ].join('\n')
+              : 'No individual test results were found.';
             const summary = [
               `## ${icon} Controller tests ${status}`,
+              results,
               `<details><summary>Controller test output</summary>\n\n\`\`\`text\n${output}\n\`\`\`\n</details>`,
             ].join('\n\n');
 
