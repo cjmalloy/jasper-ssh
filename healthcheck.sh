@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=ash
 
 CONFIG_CHANGE_MODE=${CONFIG_CHANGE_MODE:-restart}
 NORMALIZED_KEYS=/tmp/authorized_keys.normalized
@@ -11,13 +12,13 @@ normalize_keys() {
 }
 
 user_from_keys_path() {
-    local configured_user=${1#/home/}
+    local configured_user="${1#/home/}"
     printf '%s\n' "${configured_user%%/*}"
 }
 
 user_has_revoked_key() {
-    local user_keys=$1
-    local current_keys=$2
+    local user_keys="$1"
+    local current_keys="$2"
     local key
 
     while IFS= read -r key; do
@@ -27,8 +28,8 @@ user_has_revoked_key() {
 }
 
 signal_user_connections() {
-    local signal=$1
-    local user=$2
+    local signal="$1"
+    local user="$2"
     local escaped_user
     local process_name
     local pid
@@ -43,8 +44,8 @@ signal_user_connections() {
 }
 
 signal_users() {
-    local signal=$1
-    local users=$2
+    local signal="$1"
+    local users="$2"
     local user
 
     for user in $users; do
@@ -53,7 +54,7 @@ signal_users() {
 }
 
 terminate_revoked_user_connections() {
-    local current_keys=$1
+    local current_keys="$1"
     local revoked_users=
     local user_keys
     local user
@@ -87,7 +88,7 @@ remove_configured_users() {
             echo "Could not remove user $user; restart aborted." >&2
             return 1
         fi
-        rm -rf "/home/$user"
+        rm -rf "/home/${user:?}"
     done
 }
 
@@ -99,7 +100,7 @@ service_check() {
 }
 
 record_key_change() {
-    local current_keys=$1
+    local current_keys="$1"
 
     touch "$SHUTDOWN_LATCH"
     if mkdir "$REVOCATION_LOCK" 2>/dev/null; then
