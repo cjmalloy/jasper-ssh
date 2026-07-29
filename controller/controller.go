@@ -139,6 +139,9 @@ func (c *rolloutController) reconcile(ctx context.Context) error {
 		if getErr != nil {
 			return getErr
 		}
+		if deployment.Spec.Template.Annotations[c.config.annotationKey] == configMap.ResourceVersion {
+			return nil
+		}
 		if deploymentDrainsConnections(deployment) {
 			c.logger.Info(
 				"deployment rollout deferred to connection draining",
@@ -147,9 +150,6 @@ func (c *rolloutController) reconcile(ctx context.Context) error {
 				"configMap", c.config.configMapName,
 				"resourceVersion", configMap.ResourceVersion,
 			)
-			return nil
-		}
-		if deployment.Spec.Template.Annotations[c.config.annotationKey] == configMap.ResourceVersion {
 			return nil
 		}
 
