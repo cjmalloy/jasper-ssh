@@ -91,7 +91,6 @@ services:
 
   shutdown-hook:
     build: .
-    restart: on-failure
     network_mode: service:target-server
     pid: service:target-server
     entrypoint:
