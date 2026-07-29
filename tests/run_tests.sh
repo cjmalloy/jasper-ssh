@@ -186,15 +186,15 @@ mv "$key_dir/authorized_keys.new" "$key_dir/authorized_keys"
 rm -f "$state_dir/healthy"
 wait_for_file "$state_dir/healthy" ||
     fail "Drain-mode health check did not complete after a key was removed"
-rm -f "$state_dir/healthy"
-wait_for_file "$state_dir/healthy" ||
-    fail "Drain-mode health check did not complete a second time after a key was removed"
 wait_for_exit "$alice_pid" 10 ||
     fail "Alice's first connection remained open after her second key was removed"
 wait_for_exit "$alice_second_pid" 10 ||
     fail "Alice's second connection remained open after its key was removed"
 alice_pid=
 alice_second_pid=
+rm -f "$state_dir/healthy"
+wait_for_file "$state_dir/healthy" ||
+    fail "Drain-mode health check did not complete after applying revocations"
 pass "The health check closes every session for a user with a revoked key"
 
 wait_for_exit "$restart_bob_pid" 10 ||
