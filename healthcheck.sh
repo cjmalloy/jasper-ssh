@@ -118,16 +118,7 @@ record_key_change() {
     fi
 }
 
-count_ssh_connections() {
-    awk '
-        $2 ~ /:0016$/ && $4 == "01" { count++ }
-        END { print count + 0 }
-    ' /proc/net/tcp /proc/net/tcp6 2>/dev/null
-}
-
 handle_latched_shutdown() {
-    local connection_count
-
     case "$CONFIG_CHANGE_MODE" in
         restart)
             log_message "Shutdown latch active; restarting immediately."
@@ -135,22 +126,16 @@ handle_latched_shutdown() {
             kill -TERM 1
             exit 1
             ;;
-        drain) ;;
+        drain)
+            log_message "Shutdown latch active; requesting a draining restart."
+            exit 1
+            ;;
         *)
             echo "CONFIG_CHANGE_MODE must be restart or drain."
             kill -TERM 1
             exit 1
             ;;
     esac
-
-    connection_count=$(count_ssh_connections)
-    if [ "$connection_count" -eq 0 ]; then
-        log_message "Shutdown latch active; no SSH connections remain, restarting."
-        kill -TERM 1
-        exit 1
-    fi
-    log_message "Shutdown latch active; draining $connection_count SSH connection(s)."
-    exit 0
 }
 
 service_check sshd
