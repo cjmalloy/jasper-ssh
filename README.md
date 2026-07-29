@@ -24,9 +24,25 @@ the normalized key set, so reordering keys does not request a restart. If a user
 loses any key, all of that user's existing sessions are terminated. Shutdown
 remains latched even if the original file contents are restored. In the default
 `restart` mode, the server exits immediately so a container restart policy can
-replace it and load the new keys. In `drain` mode, its health check continues to
-pass while other established SSH connections remain, then exits the server once
-they close.
+replace it and load the new keys. In `drain` mode, the health check requests a
+restart after applying any per-user revocations.
+
+## Kubernetes termination draining
+
+Configure `/shutdown.sh` as an executable Kubernetes `preStop` hook:
+
+```yaml
+lifecycle:
+  preStop:
+    exec:
+      command: ["/shutdown.sh"]
+terminationGracePeriodSeconds: 300
+```
+
+The hook immediately stops the SSH listener so no new connections are accepted,
+then waits for all established SSH connections to close. It has no internal
+timeout; set `terminationGracePeriodSeconds` to the maximum permitted drain
+time. Kubernetes terminates the container when that grace period expires.
 
 ## Kubernetes rollout controller
 
@@ -67,6 +83,5 @@ docker compose -f compose.test.yml down -v
 ```
 
 The jasper-ssh suite verifies the headers sent to the upstream service, semantic
-key comparison, per-user revocation, and both restart and drain health-check
-behavior after an authorized-key change.
+key comparison, per-user revocation, restart behavior, and termination draining.
 Controller tests are separate and run with `go test ./...` from `controller/`.

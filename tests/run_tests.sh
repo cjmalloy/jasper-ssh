@@ -42,6 +42,7 @@ bob_pid=
 charlie_pid=
 restart_bob_pid=
 unauthorized_pid=
+drain_new_pid=
 summary=()
 summary_start_delimiter="=== TEST SUMMARY START ==="
 summary_end_delimiter="=== TEST SUMMARY END ==="
@@ -53,6 +54,7 @@ cleanup() {
     [ -z "$charlie_pid" ] || kill "$charlie_pid" 2>/dev/null || true
     [ -z "$restart_bob_pid" ] || kill "$restart_bob_pid" 2>/dev/null || true
     [ -z "$unauthorized_pid" ] || kill "$unauthorized_pid" 2>/dev/null || true
+    [ -z "$drain_new_pid" ] || kill "$drain_new_pid" 2>/dev/null || true
 }
 
 finish() {
@@ -215,9 +217,9 @@ kill -0 "$charlie_pid" 2>/dev/null ||
     fail "Removing alice's key also closed charlie's connection"
 curl --fail --silent --max-time 2 http://localhost:19002/ >/dev/null ||
     fail "Bob's tunnel stopped proxying after alice's key was removed"
-pass "Other users remain connected while shutdown drains"
+pass "Other users remain connected while shutdown is pending"
 
-info "Removing charlie's key during the existing drain"
+info "Removing charlie's key while shutdown is pending"
 grep -Fvx -- "$(cat "$key_dir/charlie.pub")" \
     "$key_dir/authorized_keys" > "$key_dir/authorized_keys.new"
 mv "$key_dir/authorized_keys.new" "$key_dir/authorized_keys"
@@ -226,17 +228,49 @@ wait_for_exit "$charlie_pid" 10 ||
 charlie_pid=
 kill -0 "$bob_pid" 2>/dev/null ||
     fail "Charlie's later revocation also closed bob's connection"
-pass "Later key removals revoke their users during an existing drain"
+pass "Later key removals revoke their users while shutdown is pending"
 
-[ ! -e "$state_dir/unhealthy" ] ||
-    fail "Health check failed while SSH connections were active"
-pass "Health check stays healthy while SSH connections drain"
+wait_for_file "$state_dir/unhealthy" ||
+    fail "Drain mode did not request termination after an authorized-key change"
+pass "Drain mode requests termination while SSH connections remain"
 
 info "Restoring authorized keys after shutdown was requested"
 cp "$key_dir/authorized_keys.original" "$key_dir/authorized_keys"
-[ ! -e "$state_dir/unhealthy" ] ||
-    fail "Restoring authorized keys aborted connection draining"
-pass "Restoring authorized keys does not cancel latched drain mode"
+sleep 2
+[ -e "$state_dir/unhealthy" ] ||
+    fail "Restoring authorized keys cleared the shutdown request"
+pass "Restoring authorized keys does not cancel the shutdown request"
+
+info "Starting the Kubernetes preStop drain hook"
+touch "$state_dir/start-shutdown"
+wait_for_file "$state_dir/shutdown-started" ||
+    fail "The shutdown hook did not start"
+
+ssh "${ssh_options[@]}" -i "$key_dir/bob" -N \
+    -L 19006:localhost:38023 bob@target-server &
+drain_new_pid=$!
+wait_for_exit "$drain_new_pid" 5 ||
+    fail "The shutdown hook allowed a new SSH connection"
+drain_new_pid=
+pass "The shutdown hook immediately prevents new SSH connections"
+
+kill -0 "$bob_pid" 2>/dev/null ||
+    fail "The shutdown hook closed an established SSH connection"
+curl --fail --silent --max-time 2 http://localhost:19002/ >/dev/null ||
+    fail "The established tunnel stopped while the shutdown hook waited"
+[ ! -e "$state_dir/shutdown-complete" ] ||
+    fail "The shutdown hook exited while an SSH connection remained"
+pass "The shutdown hook waits while established SSH connections remain"
+
+touch "$state_dir/signal-shutdown"
+wait_for_file "$state_dir/shutdown-signaled" ||
+    fail "The shutdown hook was not sent SIGTERM"
+sleep 2
+kill -0 "$bob_pid" 2>/dev/null ||
+    fail "SIGTERM interrupted an established SSH connection"
+[ ! -e "$state_dir/shutdown-complete" ] ||
+    fail "SIGTERM caused the shutdown hook to exit before draining"
+pass "The shutdown hook handles SIGTERM without interrupting the drain"
 
 cleanup
 alice_pid=
@@ -244,6 +278,6 @@ alice_second_pid=
 bob_pid=
 charlie_pid=
 
-wait_for_file "$state_dir/unhealthy" ||
-    fail "Health check remained healthy after SSH connections drained"
-pass "Health check requests restart after SSH connections drain"
+wait_for_file "$state_dir/shutdown-complete" ||
+    fail "The shutdown hook did not exit after SSH connections drained"
+pass "The shutdown hook exits successfully after all SSH connections close"

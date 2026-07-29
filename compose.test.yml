@@ -89,6 +89,34 @@ services:
       timeout: 5s
       retries: 20
 
+  shutdown-hook:
+    build: .
+    network_mode: service:target-server
+    pid: service:target-server
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        until [ -e /test-state/start-shutdown ]; do sleep 1; done
+        /shutdown.sh &
+        shutdown_pid=$$!
+        touch /test-state/shutdown-started
+        while kill -0 "$$shutdown_pid" 2>/dev/null; do
+          if [ -e /test-state/signal-shutdown ] &&
+             [ ! -e /test-state/shutdown-signaled ]; then
+            kill -TERM "$$shutdown_pid"
+            touch /test-state/shutdown-signaled
+          fi
+          sleep 1
+        done
+        wait "$$shutdown_pid"
+        touch /test-state/shutdown-complete
+    volumes:
+      - test-state:/test-state
+    depends_on:
+      target-server:
+        condition: service_healthy
+
   test-runner:
     build:
       context: .
@@ -103,6 +131,8 @@ services:
         condition: service_healthy
       target-server-restart:
         condition: service_healthy
+      shutdown-hook:
+        condition: service_started
     entrypoint: ["/bin/bash", "/workspace/tests/run_tests.sh"]
 
 volumes:
