@@ -44,6 +44,72 @@ normalize_keys() {
         LC_ALL=C sort -u > "$2"
 }
 
+# Fetch authorized_keys from the Kubernetes ConfigMap API and write normalized
+# keys to $1.  The optional second argument overrides the service-account
+# directory (default: /var/run/secrets/kubernetes.io/serviceaccount).
+# Requires AUTHORIZED_KEYS_CONFIGMAP_NAME and NAMESPACE (or the SA namespace
+# file) to be set.  Returns 0 on success, 1 on any failure (non-fatal;
+# callers fall back to the mounted volume).  Never logs key material.
+fetch_api_keys() {
+    local out="$1"
+    local sa_dir="${2:-/var/run/secrets/kubernetes.io/serviceaccount}"
+    local cm_name ns token http_status tmp_raw tmp_keys
+
+    cm_name="${AUTHORIZED_KEYS_CONFIGMAP_NAME:-}"
+    [ -n "$cm_name" ] || return 1
+
+    ns="${NAMESPACE:-}"
+    [ -n "$ns" ] || ns=$(cat "${sa_dir}/namespace" 2>/dev/null) || return 1
+
+    if [ ! -r "${sa_dir}/token" ]; then
+        log_message "key-revocation: SA token not readable at ${sa_dir}/token; skipping API fetch"
+        return 1
+    fi
+    token=$(cat "${sa_dir}/token") || return 1
+
+    tmp_raw=$(mktemp) || return 1
+    tmp_keys=$(mktemp) || { rm -f "$tmp_raw"; return 1; }
+
+    http_status=$(curl -s \
+        --cacert "${sa_dir}/ca.crt" \
+        -H "Authorization: Bearer ${token}" \
+        -o "$tmp_raw" \
+        -w '%{http_code}' \
+        "https://kubernetes.default.svc/api/v1/namespaces/${ns}/configmaps/${cm_name}" \
+        2>/dev/null || echo "failed")
+
+    if [ "$http_status" != "200" ]; then
+        log_message "key-revocation: API fetch failed (HTTP ${http_status}) for ${ns}/${cm_name}"
+        rm -f "$tmp_raw" "$tmp_keys"
+        return 1
+    fi
+
+    # Extract the authorized_keys value from the ConfigMap JSON without jq.
+    # The value is a JSON string; newlines are encoded as \n sequences.
+    # This handles both compact and pretty-printed API responses.
+    awk '
+        /"authorized_keys"[[:space:]]*:/ {
+            sub(/.*"authorized_keys"[[:space:]]*:[[:space:]]*"/, "")
+            sub(/"[,}[:space:]]*$/, "")
+            gsub(/\\n/, "\n")
+            printf "%s", $0
+        }
+    ' "$tmp_raw" > "$tmp_keys"
+    rm -f "$tmp_raw"
+
+    if [ ! -s "$tmp_keys" ]; then
+        log_message "key-revocation: API response contained no authorized_keys field for ${ns}/${cm_name}"
+        rm -f "$tmp_keys"
+        return 1
+    fi
+
+    normalize_keys "$tmp_keys" "$out"
+    local ret=$?
+    rm -f "$tmp_keys"
+    log_message "key-revocation: fetched keys from API (${ns}/${cm_name})"
+    return $ret
+}
+
 user_from_keys_path() {
     local configured_user="${1#/home/}"
     printf '%s\n' "${configured_user%%/*}"

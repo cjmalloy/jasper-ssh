@@ -5,26 +5,33 @@
 . /key-revocation.sh
 
 apply_key_revocations() {
-    if [ ! -e /config/authorized_keys ]; then
-        log_message "shutdown: /config/authorized_keys: not found; skipping revocations"
+    local key_source fp
+
+    # Prefer the Kubernetes API (authoritative, avoids projected-volume lag).
+    if fetch_api_keys "$current_keys"; then
+        key_source="API"
+    elif [ -e /config/authorized_keys ]; then
+        log_path_metadata "shutdown:" /config/authorized_keys
+        normalize_keys /config/authorized_keys "$current_keys" || return 1
+        key_source="volume"
+    else
+        log_message "shutdown: no key source available; skipping revocations"
         return 0
     fi
-    log_path_metadata "shutdown:" /config/authorized_keys
-    normalize_keys /config/authorized_keys "$current_keys" || return 1
-    local fp
+
     fp=$(key_file_fingerprint "$current_keys")
     if [ "$keys_initialized" = false ] ||
         ! cmp -s "$observed_keys" "$current_keys"; then
         if [ "$keys_initialized" = true ]; then
-            log_message "shutdown: keys changed (fingerprint: ${fp})"
+            log_message "shutdown: keys changed [${key_source}] (fingerprint: ${fp})"
         else
-            log_message "shutdown: initial keys fingerprint: ${fp}"
+            log_message "shutdown: initial keys [${key_source}] (fingerprint: ${fp})"
         fi
         terminate_revoked_user_connections "$current_keys"
         cp "$current_keys" "$observed_keys" || return 1
         keys_initialized=true
     else
-        log_message "shutdown: keys unchanged (fingerprint: ${fp})"
+        log_message "shutdown: keys unchanged [${key_source}] (fingerprint: ${fp})"
     fi
 }
 
