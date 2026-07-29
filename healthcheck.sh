@@ -4,7 +4,6 @@
 CONFIG_CHANGE_MODE=${CONFIG_CHANGE_MODE:-restart}
 NORMALIZED_KEYS=/tmp/authorized_keys.normalized
 SHUTDOWN_LATCH=/tmp/authorized_keys_shutdown
-REVOCATION_LOCK=/tmp/authorized_keys_revocation_started
 
 log_message() {
     printf '%s\n' "$*"
@@ -73,8 +72,6 @@ terminate_revoked_user_connections() {
         revoked_users="$revoked_users $user"
     done
 
-    signal_users TERM "$revoked_users"
-    [ -z "$revoked_users" ] || sleep 1
     signal_users KILL "$revoked_users"
 }
 
@@ -109,12 +106,9 @@ record_key_change() {
 
     touch "$SHUTDOWN_LATCH"
     log_message "Authorized key change detected; shutdown latched in ${CONFIG_CHANGE_MODE:-restart} mode."
-    if mkdir "$REVOCATION_LOCK" 2>/dev/null; then
-        if ! cmp -s "$NORMALIZED_KEYS" "$current_keys"; then
-            terminate_revoked_user_connections "$current_keys"
-            cp "$current_keys" "$NORMALIZED_KEYS"
-        fi
-        rmdir "$REVOCATION_LOCK"
+    if ! cmp -s "$NORMALIZED_KEYS" "$current_keys"; then
+        terminate_revoked_user_connections "$current_keys"
+        cp "$current_keys" "$NORMALIZED_KEYS"
     fi
 }
 

@@ -36,3 +36,17 @@ func TestLoadConfigRejectsNegativeDelay(t *testing.T) {
 		t.Fatal("loadConfig accepted a negative rollout delay")
 	}
 }
+
+func TestLoadConfigDefaultsZeroRolloutDelay(t *testing.T) {
+	t.Setenv("AUTHORIZED_KEYS_CONFIGMAP_NAME", "keys")
+	t.Setenv("SSH_DEPLOYMENT_NAME", "ssh")
+	t.Setenv("ROLLOUT_DELAY", "0s")
+
+	config, _, err := loadConfig()
+	if err != nil {
+		t.Fatalf("loadConfig: %v", err)
+	}
+	if config.rolloutDelay != defaultRolloutDelay {
+		t.Fatalf("rollout delay = %s, want %s", config.rolloutDelay, defaultRolloutDelay)
+	}
+}

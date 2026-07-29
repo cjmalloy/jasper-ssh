@@ -14,6 +14,8 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+const defaultRolloutDelay = 3 * time.Minute
+
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	config, healthAddress, err := loadConfig()
@@ -92,10 +94,13 @@ func loadConfig() (controllerConfig, string, error) {
 		return controllerConfig{}, "", fmt.Errorf("SSH_DEPLOYMENT_NAME is required")
 	}
 
-	delay := envOrDefault("ROLLOUT_DELAY", "0s")
+	delay := envOrDefault("ROLLOUT_DELAY", defaultRolloutDelay.String())
 	rolloutDelay, err := time.ParseDuration(delay)
 	if err != nil || rolloutDelay < 0 {
 		return controllerConfig{}, "", fmt.Errorf("ROLLOUT_DELAY must be a non-negative Go duration")
+	}
+	if rolloutDelay == 0 {
+		rolloutDelay = defaultRolloutDelay
 	}
 	config.rolloutDelay = rolloutDelay
 
