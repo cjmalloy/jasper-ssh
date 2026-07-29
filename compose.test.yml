@@ -97,11 +97,12 @@ services:
       - /bin/sh
       - -c
       - |
-        # Compose renders each double dollar sign below as a literal dollar sign.
+        # Compose uses double dollar signs below to pass literal dollar signs.
         until [ -e /test-state/start-shutdown ]; do sleep 1; done
         /shutdown.sh &
         shutdown_pid=$$!
         while awk '
+          # 0016 is SSH port 22; 0A is TCP_LISTEN.
           $$2 ~ /:0016$$/ && $$4 == "0A" { listening = 1 }
           END { exit !listening }
         ' /proc/net/tcp /proc/net/tcp6 2>/dev/null; do

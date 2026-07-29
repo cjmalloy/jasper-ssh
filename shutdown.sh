@@ -7,6 +7,7 @@ find_sshd_listener() {
     local socket
 
     for inode in $(awk '
+        # 0016 is SSH port 22; 0A is TCP_LISTEN.
         $2 ~ /:0016$/ && $4 == "0A" { print $10 }
     ' /proc/net/tcp /proc/net/tcp6 2>/dev/null); do
         socket="socket:[$inode]"
@@ -21,6 +22,7 @@ find_sshd_listener() {
 
 count_ssh_connections() {
     awk '
+        # 0016 is SSH port 22; 01 is TCP_ESTABLISHED.
         $2 ~ /:0016$/ && $4 == "01" { count++ }
         END { print count + 0 }
     ' /proc/net/tcp /proc/net/tcp6 2>/dev/null
