@@ -38,6 +38,7 @@ services:
     build: .
     restart: unless-stopped
     environment:
+      CONFIG_CHANGE_MODE: drain
       LOCAL_ORIGIN: "@test-origin"
       READ_ACCESS: test-read
       TAG_READ_ACCESS: test-tag-read
@@ -65,7 +66,6 @@ services:
     build: .
     restart: unless-stopped
     environment:
-      CONFIG_CHANGE_MODE: restart
       LOCAL_ORIGIN: "@test-origin"
       READ_ACCESS: test-read
       TAG_READ_ACCESS: test-tag-read

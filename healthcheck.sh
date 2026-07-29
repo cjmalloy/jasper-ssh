@@ -1,7 +1,7 @@
 #!/bin/sh
 # shellcheck shell=ash
 
-CONFIG_CHANGE_MODE=${CONFIG_CHANGE_MODE:-drain}
+CONFIG_CHANGE_MODE=${CONFIG_CHANGE_MODE:-restart}
 NORMALIZED_KEYS=/tmp/authorized_keys.normalized
 SHUTDOWN_LATCH=/tmp/authorized_keys_shutdown
 REVOCATION_LOCK=/tmp/authorized_keys_revocation_started
