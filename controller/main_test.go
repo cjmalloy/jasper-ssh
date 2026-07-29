@@ -37,16 +37,20 @@ func TestLoadConfigRejectsNegativeDelay(t *testing.T) {
 	}
 }
 
-func TestLoadConfigDefaultsZeroRolloutDelay(t *testing.T) {
-	t.Setenv("AUTHORIZED_KEYS_CONFIGMAP_NAME", "keys")
-	t.Setenv("SSH_DEPLOYMENT_NAME", "ssh")
-	t.Setenv("ROLLOUT_DELAY", "0s")
+func TestLoadConfigDefaultsRolloutDelay(t *testing.T) {
+	for name, value := range map[string]string{"unset": "", "zero": "0s"} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("AUTHORIZED_KEYS_CONFIGMAP_NAME", "keys")
+			t.Setenv("SSH_DEPLOYMENT_NAME", "ssh")
+			t.Setenv("ROLLOUT_DELAY", value)
 
-	config, _, err := loadConfig()
-	if err != nil {
-		t.Fatalf("loadConfig: %v", err)
-	}
-	if config.rolloutDelay != defaultRolloutDelay {
-		t.Fatalf("rollout delay = %s, want %s", config.rolloutDelay, defaultRolloutDelay)
+			config, _, err := loadConfig()
+			if err != nil {
+				t.Fatalf("loadConfig: %v", err)
+			}
+			if config.rolloutDelay != defaultRolloutDelay {
+				t.Fatalf("rollout delay = %s, want %s", config.rolloutDelay, defaultRolloutDelay)
+			}
+		})
 	}
 }
