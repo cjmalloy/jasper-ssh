@@ -76,16 +76,14 @@ while their liveness checks remain healthy.
 | `AUTHORIZED_KEYS_CONFIGMAP_NAME` | Authorized-keys ConfigMap to watch. Required. | |
 | `SSH_DEPLOYMENT_NAME` | jasper-ssh Deployment to patch. Required. | |
 | `ROLLOUT_ANNOTATION_KEY` | Pod-template annotation used to request rollouts. | `jasper-ssh.cjmalloy.com/authorized-keys-resource-version` |
-| `ROLLOUT_DELAY` | Non-negative Go duration before reconciliation, allowing projected keys and a health probe to apply revocations first. Zero selects the safe default. | `3m` |
+| `ROLLOUT_DELAY` | Optional non-negative Go duration before reconciliation, allowing projected keys to reach existing pods first. | `0s` |
 | `HEALTH_ADDRESS` | Controller health server listen address. | `:8080` |
 
 The controller exposes `/livez` and `/readyz` on its health address and handles
 `SIGINT` and `SIGTERM` gracefully. Mount the watched ConfigMap at
 `/config/authorized_keys`. An example namespaced ServiceAccount, Role, and
 RoleBinding is available at `controller/rbac.yaml`; update its resource
-names to match your ConfigMap and Deployment. The default rollout delay covers
-the normal Kubernetes ConfigMap projection interval plus a health-probe cycle;
-increase it for clusters configured with longer propagation intervals.
+names to match your ConfigMap and Deployment.
 
 ## Tests
 
