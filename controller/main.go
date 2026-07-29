@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+// defaultRolloutDelay covers ConfigMap projection latency plus a health-probe cycle.
 const defaultRolloutDelay = 3 * time.Minute
 
 func main() {

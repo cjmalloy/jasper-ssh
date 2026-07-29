@@ -72,6 +72,7 @@ terminate_revoked_user_connections() {
         revoked_users="$revoked_users $user"
     done
 
+    # Revocation must finish within Kubernetes' default one-second exec probe timeout.
     signal_users KILL "$revoked_users"
 }
 
