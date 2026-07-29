@@ -108,7 +108,7 @@ record_key_change() {
     local current_keys="$1"
 
     touch "$SHUTDOWN_LATCH"
-    log_message "Authorized key change detected; shutdown latched in $CONFIG_CHANGE_MODE mode."
+    log_message "Authorized key change detected; shutdown latched in ${CONFIG_CHANGE_MODE:-restart} mode."
     if mkdir "$REVOCATION_LOCK" 2>/dev/null; then
         if ! cmp -s "$NORMALIZED_KEYS" "$current_keys"; then
             terminate_revoked_user_connections "$current_keys"

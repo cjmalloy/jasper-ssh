@@ -79,6 +79,28 @@ func TestReconcileDefersDrainModeToHealthcheck(t *testing.T) {
 	}
 }
 
+func TestDeploymentDrainsConnections(t *testing.T) {
+	deployment := testDeployment("")
+	deployment.Spec.Template.Spec.Containers = []corev1.Container{
+		{Name: "sidecar"},
+		{
+			Name: "ssh-proxy",
+			Env: []corev1.EnvVar{{
+				Name:  "CONFIG_CHANGE_MODE",
+				Value: "drain",
+			}},
+		},
+	}
+	if !deploymentDrainsConnections(deployment) {
+		t.Fatal("deploymentDrainsConnections did not find drain mode in a later container")
+	}
+
+	deployment.Spec.Template.Spec.Containers[1].Env[0].Value = "restart"
+	if deploymentDrainsConnections(deployment) {
+		t.Fatal("deploymentDrainsConnections treated restart mode as drain mode")
+	}
+}
+
 func TestReconcileRetriesConflict(t *testing.T) {
 	client := fake.NewClientset(testConfigMap("42"), testDeployment(""))
 	conflicts := 0
