@@ -5,13 +5,26 @@
 . /key-revocation.sh
 
 apply_key_revocations() {
-    [ -e /config/authorized_keys ] || return 0
+    if [ ! -e /config/authorized_keys ]; then
+        log_message "shutdown: /config/authorized_keys: not found; skipping revocations"
+        return 0
+    fi
+    log_path_metadata "shutdown:" /config/authorized_keys
     normalize_keys /config/authorized_keys "$current_keys" || return 1
+    local fp
+    fp=$(key_file_fingerprint "$current_keys")
     if [ "$keys_initialized" = false ] ||
         ! cmp -s "$observed_keys" "$current_keys"; then
+        if [ "$keys_initialized" = true ]; then
+            log_message "shutdown: keys changed (fingerprint: ${fp})"
+        else
+            log_message "shutdown: initial keys fingerprint: ${fp}"
+        fi
         terminate_revoked_user_connections "$current_keys"
         cp "$current_keys" "$observed_keys" || return 1
         keys_initialized=true
+    else
+        log_message "shutdown: keys unchanged (fingerprint: ${fp})"
     fi
 }
 
@@ -61,19 +74,30 @@ keys_initialized=false
 sshd_stopped=false
 trap 'rm -f "$current_keys" "$observed_keys"' EXIT
 trap 'stop_accepting_connections' INT TERM
+log_message "shutdown: initializing"
 stop_accepting_connections
 
 apply_key_revocations ||
     echo "Could not apply authorized-key revocations; continuing shutdown drain." >&2
 connection_count=$(count_ssh_connections) || exit 1
+log_message "shutdown: initial SSH connection count: ${connection_count}"
 if [ "$connection_count" -gt 0 ]; then
     echo "Draining $connection_count SSH connection(s)."
 fi
+_sd_iter=0
+_sd_prev=$connection_count
 while [ "$connection_count" -gt 0 ]; do
     sleep 5
+    _sd_iter=$((_sd_iter + 1))
     apply_key_revocations ||
         echo "Could not apply authorized-key revocations; continuing shutdown drain." >&2
+    _sd_prev=$connection_count
     connection_count=$(count_ssh_connections) || exit 1
+    if [ "$connection_count" -ne "$_sd_prev" ]; then
+        log_message "shutdown: connection count changed: ${_sd_prev} -> ${connection_count}"
+    else
+        log_message "shutdown: poll ${_sd_iter}: ${connection_count} SSH connection(s) remaining"
+    fi
 done
 
 echo "All SSH connections drained."

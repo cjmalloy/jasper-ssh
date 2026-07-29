@@ -83,7 +83,7 @@ assert_log_not_contains "Sent SIG"
 pass "Failed kill logs 'Could not send SIG\${signal}' for each matched process"
 
 # ---------------------------------------------------------------------------
-# Test 3 – no matching processes produces no log output
+# Test 3 – no matching processes logs "no session found" but no kill attempt
 # ---------------------------------------------------------------------------
 
 pgrep() { return 1; }
@@ -93,9 +93,11 @@ export -f pgrep kill
 reset_log
 signal_user_connections TERM nobody
 
-[ ! -s "$_log_file" ] ||
-    fail "Expected no log output when no processes match, got: $(cat "$_log_file")"
-pass "No matching processes produces no log output"
+assert_log_contains "key-revocation: no sshd session found for nobody"
+assert_log_contains "key-revocation: no sshd-session session found for nobody"
+assert_log_not_contains "Sent SIG"
+assert_log_not_contains "Could not send"
+pass "No matching processes logs 'no session found' and skips kill"
 
 # ---------------------------------------------------------------------------
 # Test 4 – a failed kill does not abort processing (remaining PIDs are tried)
@@ -124,3 +126,71 @@ signal_user_connections TERM alice
 assert_log_count "Sent SIGTERM" 2
 assert_log_count "Could not send SIGTERM" 2
 pass "A failed kill does not abort processing; remaining PIDs are still signalled"
+
+# ---------------------------------------------------------------------------
+# Test 5 – matched PIDs have process description logged
+# ---------------------------------------------------------------------------
+
+pgrep() { printf '99901\n'; }
+kill() { return 0; }
+export -f pgrep kill
+
+reset_log
+signal_user_connections TERM alice
+
+assert_log_contains "key-revocation: matched sshd PID 99901:"
+assert_log_contains "key-revocation: matched sshd-session PID 99901:"
+pass "Matched PIDs have a process description line logged"
+
+# ---------------------------------------------------------------------------
+# Test 6 – remaining-sessions count is logged after signaling
+# ---------------------------------------------------------------------------
+
+pgrep() { return 1; }
+kill() { return 0; }
+export -f pgrep kill
+
+reset_log
+signal_user_connections TERM nobody
+
+assert_log_contains "key-revocation: no sessions remain for nobody after SIGTERM"
+pass "Remaining-sessions count is logged after signaling"
+
+# ---------------------------------------------------------------------------
+# Test 7 – key_file_fingerprint: identical content → same hash;
+#           changed content → different hash
+# ---------------------------------------------------------------------------
+
+_fp_a=$(mktemp)
+_fp_b=$(mktemp)
+printf 'ssh-rsa AAAA key1\nssh-rsa BBBB key2\n' > "$_fp_a"
+printf 'ssh-rsa AAAA key1\nssh-rsa BBBB key2\n' > "$_fp_b"
+
+fp1=$(key_file_fingerprint "$_fp_a")
+fp2=$(key_file_fingerprint "$_fp_b")
+[ "$fp1" = "$fp2" ] ||
+    fail "Identical content should produce identical fingerprints; got '$fp1' and '$fp2'"
+
+printf 'ssh-rsa CCCC key3\n' >> "$_fp_b"
+fp3=$(key_file_fingerprint "$_fp_b")
+[ "$fp1" != "$fp3" ] ||
+    fail "Different content should produce different fingerprints"
+
+rm -f "$_fp_a" "$_fp_b"
+pass "key_file_fingerprint: identical content → same fingerprint; changed content → different fingerprint"
+
+# ---------------------------------------------------------------------------
+# Test 8 – terminate_revoked_user_connections logs fingerprint and
+#           "no revoked users" when no /home/*/authorized_keys files exist
+# ---------------------------------------------------------------------------
+
+_ck=$(mktemp)
+printf 'ssh-rsa AAAA key1\n' > "$_ck"
+
+reset_log
+terminate_revoked_user_connections "$_ck"
+
+assert_log_contains "key-revocation: checking for revocations, current keys:"
+assert_log_contains "key-revocation: no revoked users"
+rm -f "$_ck"
+pass "terminate_revoked_user_connections logs fingerprint and 'no revoked users' when no home dirs match"
