@@ -15,17 +15,18 @@ Create an SSH authenticated [jasper](https://github.com/cjmalloy/jasper) proxy
 | `TAG_READ_ACCESS`    | Sets `Tag-Read-Access` header. Requires upstream server to have `JASPER_ALLOW_AUTH_HEADERS` set.                                                                                                               |                          |
 | `TAG_WRITE_ACCESS`   | Sets `Tag-Write-Access` header. Requires upstream server to have `JASPER_ALLOW_AUTH_HEADERS` set.                                                                                                              |                          |
 | `SSHD_LOG_LEVEL`     | Sets the LogLevel in sshd_config.                                                                                                                                                                              | INFO                     |
-| `CONFIG_CHANGE_MODE` | Handles a semantic `/config/authorized_keys` change: `restart` exits the server immediately; `drain` remains healthy until a Deployment rollout invokes the shutdown hook.                                       | `restart`                |
+| `CONFIG_CHANGE_MODE` | Handles a semantic `/config/authorized_keys` change: `restart` exits the server immediately; `drain` terminates affected sessions while remaining healthy for a Deployment rollout.                              | `restart`                |
 
 ## Authorized-key changes
 
 When the mounted `/config/authorized_keys` changes, the health check compares
-the normalized key set, so reordering keys does not request a restart. Shutdown
+the normalized key set, so reordering keys does not request a restart. If a user
+loses any key, all of that user's existing sessions are terminated. Shutdown
 remains latched even if the original file contents are restored. In the default
 `restart` mode, the server exits immediately so a container restart policy can
-replace it and load the new keys. In `drain` mode, the health check remains
-healthy; the rollout controller replaces the pod so its `preStop` hook can apply
-per-user revocations and drain the remaining sessions.
+replace it and load the new keys. In `drain` mode, the health check applies
+per-user revocations but remains healthy; the rollout controller replaces the
+pod so its `preStop` hook can drain the remaining sessions.
 
 ## Kubernetes termination draining
 
@@ -49,11 +50,11 @@ spec:
                 command: ["/shutdown.sh"]
 ```
 
-The hook immediately stops the SSH listener so no new connections are accepted.
-If a user loses any key, the hook terminates all of that user's existing
-sessions, then waits for the remaining established SSH connections to close. It
-continues checking the mounted keys while it drains so ConfigMap projection can
-complete after shutdown starts. It has no internal timeout. The one-week
+The hook immediately stops the SSH listener so no new connections are accepted,
+applies the same per-user revocations as the health check, then waits for the
+remaining established SSH connections to close. It continues checking the
+mounted keys while it drains so revocations projected after shutdown starts are
+also applied. It has no internal timeout. The one-week
 `terminationGracePeriodSeconds` is only an upper bound; disruptions or
 administrative deletion can terminate sessions earlier.
 `maxUnavailable: 0` preserves availability during an ordinary rollout, while

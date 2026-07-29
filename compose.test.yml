@@ -57,7 +57,7 @@ services:
       http-backend:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "/healthcheck.sh && touch /test-state/healthy || { touch /test-state/unhealthy; exit 1; }"]
+      test: ["CMD-SHELL", "{ [ -e /test-state/shutdown-started ] || /healthcheck.sh; } && touch /test-state/healthy || { touch /test-state/unhealthy; exit 1; }"]
       interval: 1s
       timeout: 5s
       retries: 20
