@@ -127,14 +127,16 @@ trap 'rm -f "$current_keys" "$observed_keys"' EXIT
 trap 'stop_accepting_connections' INT TERM
 stop_accepting_connections
 
-apply_key_revocations || exit 1
+apply_key_revocations ||
+    echo "Could not apply authorized-key revocations; continuing shutdown drain." >&2
 connection_count=$(count_ssh_connections) || exit 1
 if [ "$connection_count" -gt 0 ]; then
     echo "Draining $connection_count SSH connection(s)."
 fi
 while [ "$connection_count" -gt 0 ]; do
     sleep 5
-    apply_key_revocations || exit 1
+    apply_key_revocations ||
+        echo "Could not apply authorized-key revocations; continuing shutdown drain." >&2
     connection_count=$(count_ssh_connections) || exit 1
 done
 

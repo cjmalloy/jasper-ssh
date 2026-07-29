@@ -147,7 +147,6 @@ assert_header "$websocket_response" Upgrade websocket
 pass "WebSocket upgrade headers pass through the proxy"
 
 info "Reordering authorized keys"
-cp "$key_dir/authorized_keys" "$key_dir/authorized_keys.original"
 awk '{ keys[NR] = $0 } END { for (line = NR; line > 0; line--) print keys[line] }' \
     "$key_dir/authorized_keys" > "$key_dir/authorized_keys.new"
 mv "$key_dir/authorized_keys.new" "$key_dir/authorized_keys"
@@ -187,6 +186,9 @@ mv "$key_dir/authorized_keys.new" "$key_dir/authorized_keys"
 rm -f "$state_dir/healthy"
 wait_for_file "$state_dir/healthy" ||
     fail "Drain-mode health check did not complete after a key was removed"
+rm -f "$state_dir/healthy"
+wait_for_file "$state_dir/healthy" ||
+    fail "Drain-mode health check did not complete a second time after a key was removed"
 kill -0 "$alice_pid" 2>/dev/null ||
     fail "Drain-mode health check closed Alice's first connection"
 kill -0 "$alice_second_pid" 2>/dev/null ||
@@ -227,6 +229,9 @@ mv "$key_dir/authorized_keys.new" "$key_dir/authorized_keys"
 rm -f "$state_dir/healthy"
 wait_for_file "$state_dir/healthy" ||
     fail "Drain-mode health check did not complete after a later key removal"
+rm -f "$state_dir/healthy"
+wait_for_file "$state_dir/healthy" ||
+    fail "Drain-mode health check did not complete a second time after a later key removal"
 kill -0 "$charlie_pid" 2>/dev/null ||
     fail "Drain-mode health check closed Charlie's connection"
 kill -0 "$bob_pid" 2>/dev/null ||
