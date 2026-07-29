@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   docker-compose:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v7
 
@@ -75,6 +75,16 @@ jobs:
         uses: actions/github-script@v9
         with:
           script: |
+            const { data: pullRequest } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            if (pullRequest.head.sha !== context.payload.pull_request.head.sha) {
+              core.info('Skipping stale integration test results.');
+              return;
+            }
+
             const fs = require('fs');
             const marker = '<!-- docker-compose-integration-results -->';
             const summary = fs.existsSync('test-summary.md')
