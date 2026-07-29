@@ -1,6 +1,7 @@
 #!/bin/sh
 
 echo "Writing SSHD Config and NGINX Configs for Users"
+echo "CONFIG_CHANGE_MODE: ${CONFIG_CHANGE_MODE:-restart}"
 
 base_port=38022
 sshd_config="/etc/ssh/sshd_config"
