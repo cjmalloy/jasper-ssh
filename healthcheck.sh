@@ -126,10 +126,7 @@ handle_latched_shutdown() {
             kill -TERM 1
             exit 1
             ;;
-        drain)
-            log_message "Shutdown latch active; requesting a draining restart."
-            exit 1
-            ;;
+        drain) return 0 ;;
         *)
             echo "CONFIG_CHANGE_MODE must be restart or drain."
             kill -TERM 1
@@ -151,5 +148,5 @@ if [ -e "$NORMALIZED_KEYS" ] && [ -e /config/authorized_keys ]; then
     [ ! -e "$SHUTDOWN_LATCH" ] || handle_latched_shutdown
 fi
 
-echo "SSH and Nginx are running, and /config/authorized_keys is unchanged."
+echo "SSH and Nginx are running."
 exit 0

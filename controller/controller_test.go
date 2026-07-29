@@ -57,7 +57,7 @@ func TestReconcileIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestReconcileDefersDrainModeToHealthcheck(t *testing.T) {
+func TestReconcilePatchesDrainModeDeployment(t *testing.T) {
 	deployment := testDeployment("")
 	deployment.Spec.Template.Spec.Containers = []corev1.Container{{
 		Name: "ssh-proxy",
@@ -72,32 +72,16 @@ func TestReconcileDefersDrainModeToHealthcheck(t *testing.T) {
 		t.Fatalf("reconcile: %v", err)
 	}
 
-	for _, action := range client.Actions() {
-		if action.GetVerb() == "patch" {
-			t.Fatal("reconcile rolled out a deployment configured to drain connections")
-		}
+	deployment, err := client.AppsV1().Deployments("test").Get(
+		context.Background(),
+		"ssh",
+		metav1.GetOptions{},
+	)
+	if err != nil {
+		t.Fatalf("get deployment: %v", err)
 	}
-}
-
-func TestDeploymentDrainsConnections(t *testing.T) {
-	deployment := testDeployment("")
-	deployment.Spec.Template.Spec.Containers = []corev1.Container{
-		{Name: "sidecar"},
-		{
-			Name: "ssh-proxy",
-			Env: []corev1.EnvVar{{
-				Name:  "CONFIG_CHANGE_MODE",
-				Value: "drain",
-			}},
-		},
-	}
-	if !deploymentDrainsConnections(deployment) {
-		t.Fatal("deploymentDrainsConnections did not find drain mode in a later container")
-	}
-
-	deployment.Spec.Template.Spec.Containers[1].Env[0].Value = "restart"
-	if deploymentDrainsConnections(deployment) {
-		t.Fatal("deploymentDrainsConnections treated restart mode as drain mode")
+	if got := deployment.Spec.Template.Annotations[testAnnotation]; got != "42" {
+		t.Fatalf("annotation = %q, want 42", got)
 	}
 }
 

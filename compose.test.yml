@@ -100,6 +100,13 @@ services:
         until [ -e /test-state/start-shutdown ]; do sleep 1; done
         /shutdown.sh &
         shutdown_pid=$$!
+        while awk '
+          $$2 ~ /:0016$$/ && $$4 == "0A" { listening = 1 }
+          END { exit !listening }
+        ' /proc/net/tcp /proc/net/tcp6 2>/dev/null; do
+          kill -0 "$$shutdown_pid" 2>/dev/null || exit 1
+          sleep 1
+        done
         touch /test-state/shutdown-started
         while kill -0 "$$shutdown_pid" 2>/dev/null; do
           if [ -e /test-state/signal-shutdown ] &&

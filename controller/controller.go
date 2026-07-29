@@ -142,16 +142,6 @@ func (c *rolloutController) reconcile(ctx context.Context) error {
 		if deployment.Spec.Template.Annotations[c.config.annotationKey] == configMap.ResourceVersion {
 			return nil
 		}
-		if deploymentDrainsConnections(deployment) {
-			c.logger.Info(
-				"deployment rollout deferred to connection draining",
-				"namespace", c.config.namespace,
-				"deployment", c.config.deploymentName,
-				"configMap", c.config.configMapName,
-				"resourceVersion", configMap.ResourceVersion,
-			)
-			return nil
-		}
 
 		patch, marshalErr := rolloutPatch(deployment, c.config.annotationKey, configMap.ResourceVersion)
 		if marshalErr != nil {
@@ -182,17 +172,6 @@ func (c *rolloutController) reconcile(ctx context.Context) error {
 		)
 	}
 	return nil
-}
-
-func deploymentDrainsConnections(deployment *appsv1.Deployment) bool {
-	for _, container := range deployment.Spec.Template.Spec.Containers {
-		for _, env := range container.Env {
-			if env.Name == "CONFIG_CHANGE_MODE" && env.Value == "drain" {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func rolloutPatch(deployment *appsv1.Deployment, annotationKey, resourceVersion string) ([]byte, error) {

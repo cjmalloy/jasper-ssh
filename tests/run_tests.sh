@@ -230,16 +230,16 @@ kill -0 "$bob_pid" 2>/dev/null ||
     fail "Charlie's later revocation also closed bob's connection"
 pass "Later key removals revoke their users while shutdown is pending"
 
-wait_for_file "$state_dir/unhealthy" ||
-    fail "Drain mode did not request termination after an authorized-key change"
-pass "Drain mode requests termination while SSH connections remain"
+[ ! -e "$state_dir/unhealthy" ] ||
+    fail "Drain mode became unhealthy after an authorized-key change"
+pass "Drain mode remains healthy after applying per-user revocations"
 
-info "Restoring authorized keys after shutdown was requested"
+info "Restoring authorized keys before the rollout"
 cp "$key_dir/authorized_keys.original" "$key_dir/authorized_keys"
 sleep 2
-[ -e "$state_dir/unhealthy" ] ||
-    fail "Restoring authorized keys cleared the shutdown request"
-pass "Restoring authorized keys does not cancel the shutdown request"
+[ ! -e "$state_dir/unhealthy" ] ||
+    fail "Restoring authorized keys made drain mode unhealthy"
+pass "Drain mode remains healthy when authorized keys are restored"
 
 info "Starting the Kubernetes preStop drain hook"
 touch "$state_dir/start-shutdown"

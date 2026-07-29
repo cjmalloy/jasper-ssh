@@ -15,7 +15,7 @@ Create an SSH authenticated [jasper](https://github.com/cjmalloy/jasper) proxy
 | `TAG_READ_ACCESS`    | Sets `Tag-Read-Access` header. Requires upstream server to have `JASPER_ALLOW_AUTH_HEADERS` set.                                                                                                               |                          |
 | `TAG_WRITE_ACCESS`   | Sets `Tag-Write-Access` header. Requires upstream server to have `JASPER_ALLOW_AUTH_HEADERS` set.                                                                                                              |                          |
 | `SSHD_LOG_LEVEL`     | Sets the LogLevel in sshd_config.                                                                                                                                                                              | INFO                     |
-| `CONFIG_CHANGE_MODE` | Handles a semantic `/config/authorized_keys` change: `restart` exits the server immediately; `drain` waits for established SSH connections to close before exiting.                                            | `restart`                |
+| `CONFIG_CHANGE_MODE` | Handles a semantic `/config/authorized_keys` change: `restart` exits the server immediately; `drain` applies per-user revocations while remaining healthy for a Deployment rollout.                              | `restart`                |
 
 ## Authorized-key changes
 
@@ -24,25 +24,40 @@ the normalized key set, so reordering keys does not request a restart. If a user
 loses any key, all of that user's existing sessions are terminated. Shutdown
 remains latched even if the original file contents are restored. In the default
 `restart` mode, the server exits immediately so a container restart policy can
-replace it and load the new keys. In `drain` mode, the health check requests a
-restart after applying any per-user revocations.
+replace it and load the new keys. In `drain` mode, the health check applies
+per-user revocations but remains healthy; the rollout controller replaces the
+pod so its `preStop` hook can drain the remaining sessions.
 
 ## Kubernetes termination draining
 
 Configure `/shutdown.sh` as an executable Kubernetes `preStop` hook:
 
 ```yaml
-lifecycle:
-  preStop:
-    exec:
-      command: ["/shutdown.sh"]
-terminationGracePeriodSeconds: 300
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 20
+  template:
+    spec:
+      terminationGracePeriodSeconds: 604800
+      containers:
+        - name: jasper-ssh
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/shutdown.sh"]
 ```
 
 The hook immediately stops the SSH listener so no new connections are accepted,
 then waits for all established SSH connections to close. It has no internal
-timeout; set `terminationGracePeriodSeconds` to the maximum permitted drain
-time. Kubernetes terminates the container when that grace period expires.
+timeout. The one-week `terminationGracePeriodSeconds` is only an upper bound;
+disruptions or administrative deletion can terminate sessions earlier.
+`maxUnavailable: 0` preserves availability during an ordinary rollout, while
+`maxSurge: 20` permits up to 20 extra pods but does not strictly limit how many
+pods may be terminating. Deployments with more than 20 replicas require
+controller-orchestrated batches for a strict termination concurrency limit.
 
 ## Kubernetes rollout controller
 
@@ -51,9 +66,9 @@ The optional controller image is published as
 watches one authorized-keys ConfigMap, and patches the configured SSH
 Deployment's pod-template annotation with the ConfigMap `resourceVersion`.
 Repeated events for an already represented version do not produce another
-patch. When an SSH container explicitly sets `CONFIG_CHANGE_MODE=drain`, the
-controller leaves the rollout to the container health check so established
-connections can drain before that container restarts.
+patch. Deployments are patched in both `restart` and `drain` modes. In `drain`
+mode, the resulting Deployment rollout invokes the old pods' `preStop` hooks
+while their liveness checks remain healthy.
 
 | Environment variable | Description | Default |
 |----------------------|-------------|---------|
@@ -76,7 +91,8 @@ Run the jasper-ssh Bash integration suite with Docker Compose:
 
 ```sh
 docker compose -f compose.test.yml up --build --wait \
-  keygen http-backend config-tester target-server target-server-restart
+  keygen http-backend config-tester target-server target-server-restart \
+  shutdown-hook
 docker compose -f compose.test.yml up --build --no-deps \
   --abort-on-container-exit --exit-code-from test-runner test-runner
 docker compose -f compose.test.yml down -v
