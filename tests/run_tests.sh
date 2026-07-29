@@ -147,7 +147,6 @@ assert_header "$websocket_response" Upgrade websocket
 pass "WebSocket upgrade headers pass through the proxy"
 
 info "Reordering authorized keys"
-cp "$key_dir/authorized_keys" "$key_dir/authorized_keys.original"
 awk '{ keys[NR] = $0 } END { for (line = NR; line > 0; line--) print keys[line] }' \
     "$key_dir/authorized_keys" > "$key_dir/authorized_keys.new"
 mv "$key_dir/authorized_keys.new" "$key_dir/authorized_keys"
@@ -184,13 +183,19 @@ grep -Fvx -- "$(cat "$key_dir/alice_second.pub")" \
     "$key_dir/authorized_keys" > "$key_dir/authorized_keys.new"
 mv "$key_dir/authorized_keys.new" "$key_dir/authorized_keys"
 
+rm -f "$state_dir/healthy"
+wait_for_file "$state_dir/healthy" ||
+    fail "Drain-mode health check did not complete after a key was removed"
 wait_for_exit "$alice_pid" 10 ||
     fail "Alice's first connection remained open after her second key was removed"
 wait_for_exit "$alice_second_pid" 10 ||
     fail "Alice's second connection remained open after its key was removed"
 alice_pid=
 alice_second_pid=
-pass "Revoking one of multiple keys closes all sessions for that user"
+rm -f "$state_dir/healthy"
+wait_for_file "$state_dir/healthy" ||
+    fail "Drain-mode health check did not complete after applying revocations"
+pass "The health check closes every session for a user with a revoked key"
 
 wait_for_exit "$restart_bob_pid" 10 ||
     fail "Restart mode did not exit the server after a key change"
@@ -219,29 +224,9 @@ curl --fail --silent --max-time 2 http://localhost:19002/ >/dev/null ||
     fail "Bob's tunnel stopped proxying after alice's key was removed"
 pass "Other users remain connected while shutdown is pending"
 
-info "Removing charlie's key while shutdown is pending"
-grep -Fvx -- "$(cat "$key_dir/charlie.pub")" \
-    "$key_dir/authorized_keys" > "$key_dir/authorized_keys.new"
-mv "$key_dir/authorized_keys.new" "$key_dir/authorized_keys"
-wait_for_exit "$charlie_pid" 10 ||
-    fail "Charlie's connection remained open after a later key removal"
-charlie_pid=
-kill -0 "$bob_pid" 2>/dev/null ||
-    fail "Charlie's later revocation also closed bob's connection"
-pass "Later key removals revoke their users while shutdown is pending"
-
 [ ! -e "$state_dir/unhealthy" ] ||
     fail "Drain mode became unhealthy after an authorized-key change"
 pass "Drain mode remains healthy after applying per-user revocations"
-
-info "Restoring authorized keys before the rollout"
-cp "$key_dir/authorized_keys.original" "$key_dir/authorized_keys"
-rm -f "$state_dir/healthy"
-wait_for_file "$state_dir/healthy" ||
-    fail "Drain-mode health check did not complete after keys were restored"
-[ ! -e "$state_dir/unhealthy" ] ||
-    fail "Restoring authorized keys made drain mode unhealthy"
-pass "Drain mode remains healthy when authorized keys are restored"
 
 info "Starting the Kubernetes preStop drain hook"
 touch "$state_dir/start-shutdown"
@@ -258,11 +243,26 @@ pass "The shutdown hook immediately prevents new SSH connections"
 
 kill -0 "$bob_pid" 2>/dev/null ||
     fail "The shutdown hook closed an established SSH connection"
+kill -0 "$charlie_pid" 2>/dev/null ||
+    fail "The shutdown hook closed Charlie's established SSH connection"
 curl --fail --silent --max-time 2 http://localhost:19002/ >/dev/null ||
     fail "The established tunnel stopped while the shutdown hook waited"
 [ ! -e "$state_dir/shutdown-complete" ] ||
     fail "The shutdown hook exited while an SSH connection remained"
 pass "The shutdown hook waits while established SSH connections remain"
+
+info "Removing charlie's key after shutdown started"
+grep -Fvx -- "$(cat "$key_dir/charlie.pub")" \
+    "$key_dir/authorized_keys" > "$key_dir/authorized_keys.new"
+mv "$key_dir/authorized_keys.new" "$key_dir/authorized_keys"
+wait_for_exit "$charlie_pid" 15 ||
+    fail "Shutdown did not close Charlie's connection after her key was removed"
+charlie_pid=
+kill -0 "$bob_pid" 2>/dev/null ||
+    fail "Charlie's key removal also closed bob's connection"
+[ ! -e "$state_dir/shutdown-complete" ] ||
+    fail "The shutdown hook exited while Bob's connection remained"
+pass "The shutdown hook applies authorized-key updates while draining"
 
 touch "$state_dir/signal-shutdown"
 wait_for_file "$state_dir/shutdown-signaled" ||

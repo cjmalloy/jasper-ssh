@@ -1,6 +1,20 @@
 #!/bin/sh
 # shellcheck shell=ash
 
+# shellcheck source=key-revocation.sh
+. /key-revocation.sh
+
+apply_key_revocations() {
+    [ -e /config/authorized_keys ] || return 0
+    normalize_keys /config/authorized_keys "$current_keys" || return 1
+    if [ "$keys_initialized" = false ] ||
+        ! cmp -s "$observed_keys" "$current_keys"; then
+        terminate_revoked_user_connections "$current_keys"
+        cp "$current_keys" "$observed_keys" || return 1
+        keys_initialized=true
+    fi
+}
+
 find_sshd_listener() {
     local fd
     local inode
@@ -38,16 +52,27 @@ stop_accepting_connections() {
     kill -TERM "$listener_pid" 2>/dev/null || true
 }
 
+current_keys=$(mktemp) || exit 1
+observed_keys=$(mktemp) || {
+    rm -f "$current_keys"
+    exit 1
+}
+keys_initialized=false
 sshd_stopped=false
+trap 'rm -f "$current_keys" "$observed_keys"' EXIT
 trap 'stop_accepting_connections' INT TERM
 stop_accepting_connections
 
+apply_key_revocations ||
+    echo "Could not apply authorized-key revocations; continuing shutdown drain." >&2
 connection_count=$(count_ssh_connections) || exit 1
 if [ "$connection_count" -gt 0 ]; then
     echo "Draining $connection_count SSH connection(s)."
 fi
 while [ "$connection_count" -gt 0 ]; do
     sleep 5
+    apply_key_revocations ||
+        echo "Could not apply authorized-key revocations; continuing shutdown drain." >&2
     connection_count=$(count_ssh_connections) || exit 1
 done
 

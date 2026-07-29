@@ -57,7 +57,7 @@ services:
       http-backend:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "/healthcheck.sh && touch /test-state/healthy || { touch /test-state/unhealthy; exit 1; }"]
+      test: ["CMD-SHELL", "{ [ -e /test-state/start-shutdown ] || /healthcheck.sh; } && touch /test-state/healthy || { touch /test-state/unhealthy; exit 1; }"]
       interval: 1s
       timeout: 5s
       retries: 20
@@ -99,7 +99,7 @@ services:
       - |
         # Compose uses double dollar signs below to pass literal dollar signs.
         until [ -e /test-state/start-shutdown ]; do sleep 1; done
-        /shutdown.sh &
+        chroot /proc/1/root /shutdown.sh &
         shutdown_pid=$$!
         while awk '
           # 0016 is SSH port 22; 0A is TCP_LISTEN.

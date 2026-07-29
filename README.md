@@ -15,7 +15,7 @@ Create an SSH authenticated [jasper](https://github.com/cjmalloy/jasper) proxy
 | `TAG_READ_ACCESS`    | Sets `Tag-Read-Access` header. Requires upstream server to have `JASPER_ALLOW_AUTH_HEADERS` set.                                                                                                               |                          |
 | `TAG_WRITE_ACCESS`   | Sets `Tag-Write-Access` header. Requires upstream server to have `JASPER_ALLOW_AUTH_HEADERS` set.                                                                                                              |                          |
 | `SSHD_LOG_LEVEL`     | Sets the LogLevel in sshd_config.                                                                                                                                                                              | INFO                     |
-| `CONFIG_CHANGE_MODE` | Handles a semantic `/config/authorized_keys` change: `restart` exits the server immediately; `drain` applies per-user revocations while remaining healthy for a Deployment rollout.                              | `restart`                |
+| `CONFIG_CHANGE_MODE` | Handles a semantic `/config/authorized_keys` change: `restart` exits the server immediately; `drain` terminates affected sessions while remaining healthy for a Deployment rollout.                              | `restart`                |
 
 ## Authorized-key changes
 
@@ -51,9 +51,12 @@ spec:
 ```
 
 The hook immediately stops the SSH listener so no new connections are accepted,
-then waits for all established SSH connections to close. It has no internal
-timeout. The one-week `terminationGracePeriodSeconds` is only an upper bound;
-disruptions or administrative deletion can terminate sessions earlier.
+applies the same per-user revocations as the health check, then waits for the
+remaining established SSH connections to close. It continues checking the
+mounted keys while it drains so revocations projected after shutdown starts are
+also applied. It has no internal timeout. The one-week
+`terminationGracePeriodSeconds` is only an upper bound; disruptions or
+administrative deletion can terminate sessions earlier.
 `maxUnavailable: 0` preserves availability during an ordinary rollout, while
 `maxSurge: 20` permits up to 20 extra pods but does not strictly limit how many
 pods may be terminating. Deployments with more than 20 replicas require
