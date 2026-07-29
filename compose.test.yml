@@ -99,7 +99,7 @@ services:
       - |
         # Compose uses double dollar signs below to pass literal dollar signs.
         until [ -e /test-state/start-shutdown ]; do sleep 1; done
-        /shutdown.sh &
+        chroot /proc/1/root /shutdown.sh &
         shutdown_pid=$$!
         while awk '
           # 0016 is SSH port 22; 0A is TCP_LISTEN.

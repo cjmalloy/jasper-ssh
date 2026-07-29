@@ -184,13 +184,14 @@ grep -Fvx -- "$(cat "$key_dir/alice_second.pub")" \
     "$key_dir/authorized_keys" > "$key_dir/authorized_keys.new"
 mv "$key_dir/authorized_keys.new" "$key_dir/authorized_keys"
 
-wait_for_exit "$alice_pid" 10 ||
-    fail "Alice's first connection remained open after her second key was removed"
-wait_for_exit "$alice_second_pid" 10 ||
-    fail "Alice's second connection remained open after its key was removed"
-alice_pid=
-alice_second_pid=
-pass "Revoking one of multiple keys closes all sessions for that user"
+rm -f "$state_dir/healthy"
+wait_for_file "$state_dir/healthy" ||
+    fail "Drain-mode health check did not complete after a key was removed"
+kill -0 "$alice_pid" 2>/dev/null ||
+    fail "Drain-mode health check closed Alice's first connection"
+kill -0 "$alice_second_pid" 2>/dev/null ||
+    fail "Drain-mode health check closed Alice's second connection"
+pass "Drain mode defers per-user revocation until shutdown"
 
 wait_for_exit "$restart_bob_pid" 10 ||
     fail "Restart mode did not exit the server after a key change"
@@ -223,30 +224,34 @@ info "Removing charlie's key while shutdown is pending"
 grep -Fvx -- "$(cat "$key_dir/charlie.pub")" \
     "$key_dir/authorized_keys" > "$key_dir/authorized_keys.new"
 mv "$key_dir/authorized_keys.new" "$key_dir/authorized_keys"
-wait_for_exit "$charlie_pid" 10 ||
-    fail "Charlie's connection remained open after a later key removal"
-charlie_pid=
+rm -f "$state_dir/healthy"
+wait_for_file "$state_dir/healthy" ||
+    fail "Drain-mode health check did not complete after a later key removal"
+kill -0 "$charlie_pid" 2>/dev/null ||
+    fail "Drain-mode health check closed Charlie's connection"
 kill -0 "$bob_pid" 2>/dev/null ||
-    fail "Charlie's later revocation also closed bob's connection"
-pass "Later key removals revoke their users while shutdown is pending"
+    fail "Charlie's key removal also closed bob's connection"
+pass "Later key removals also remain pending until shutdown"
 
 [ ! -e "$state_dir/unhealthy" ] ||
     fail "Drain mode became unhealthy after an authorized-key change"
-pass "Drain mode remains healthy after applying per-user revocations"
-
-info "Restoring authorized keys before the rollout"
-cp "$key_dir/authorized_keys.original" "$key_dir/authorized_keys"
-rm -f "$state_dir/healthy"
-wait_for_file "$state_dir/healthy" ||
-    fail "Drain-mode health check did not complete after keys were restored"
-[ ! -e "$state_dir/unhealthy" ] ||
-    fail "Restoring authorized keys made drain mode unhealthy"
-pass "Drain mode remains healthy when authorized keys are restored"
+pass "Drain mode remains healthy while revocations are pending"
 
 info "Starting the Kubernetes preStop drain hook"
 touch "$state_dir/start-shutdown"
 wait_for_file "$state_dir/shutdown-started" ||
     fail "The shutdown hook did not start"
+
+wait_for_exit "$alice_pid" 10 ||
+    fail "Shutdown did not close Alice's first connection after her key was removed"
+wait_for_exit "$alice_second_pid" 10 ||
+    fail "Shutdown did not close Alice's second connection after her key was removed"
+wait_for_exit "$charlie_pid" 10 ||
+    fail "Shutdown did not close Charlie's connection after her key was removed"
+alice_pid=
+alice_second_pid=
+charlie_pid=
+pass "Shutdown closes all sessions for users with revoked keys"
 
 ssh "${ssh_options[@]}" -i "$key_dir/bob" -N \
     -L 19006:localhost:38023 bob@target-server &

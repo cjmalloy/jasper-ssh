@@ -49,6 +49,7 @@ signal_users() {
 }
 
 terminate_revoked_user_connections() {
+    local current_keys="$1"
     local revoked_users=
     local user_keys
     local user
@@ -72,8 +73,8 @@ apply_key_revocations() {
     normalize_keys /config/authorized_keys "$current_keys" || return 1
     if [ "$keys_initialized" = false ] ||
         ! cmp -s "$observed_keys" "$current_keys"; then
-        terminate_revoked_user_connections
-        cp "$current_keys" "$observed_keys"
+        terminate_revoked_user_connections "$current_keys"
+        cp "$current_keys" "$observed_keys" || return 1
         keys_initialized=true
     fi
 }
