@@ -38,7 +38,11 @@ signal_user_connections() {
     for process_name in sshd sshd-session; do
         pgrep -f "^${process_name}: ${escaped_user}([ @]|$)" 2>/dev/null |
             while IFS= read -r pid; do
-                kill "-$signal" "$pid" 2>/dev/null || true
+                if kill "-$signal" "$pid" 2>/dev/null; then
+                    log_message "Sent SIG${signal} to ${process_name} session for ${user} (PID ${pid})."
+                else
+                    log_message "Could not send SIG${signal} to ${process_name} session for ${user} (PID ${pid}); it may have already exited."
+                fi
             done
     done
 }
