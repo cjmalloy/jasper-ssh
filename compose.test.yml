@@ -57,7 +57,7 @@ services:
       http-backend:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "/healthcheck.sh || { touch /test-state/unhealthy; exit 1; }"]
+      test: ["CMD-SHELL", "/healthcheck.sh && touch /test-state/healthy || { touch /test-state/unhealthy; exit 1; }"]
       interval: 1s
       timeout: 5s
       retries: 20
@@ -97,6 +97,7 @@ services:
       - /bin/sh
       - -c
       - |
+        # Compose renders each double dollar sign below as a literal dollar sign.
         until [ -e /test-state/start-shutdown ]; do sleep 1; done
         /shutdown.sh &
         shutdown_pid=$$!

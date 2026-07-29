@@ -236,7 +236,9 @@ pass "Drain mode remains healthy after applying per-user revocations"
 
 info "Restoring authorized keys before the rollout"
 cp "$key_dir/authorized_keys.original" "$key_dir/authorized_keys"
-sleep 2
+rm -f "$state_dir/healthy"
+wait_for_file "$state_dir/healthy" ||
+    fail "Drain-mode health check did not complete after keys were restored"
 [ ! -e "$state_dir/unhealthy" ] ||
     fail "Restoring authorized keys made drain mode unhealthy"
 pass "Drain mode remains healthy when authorized keys are restored"
