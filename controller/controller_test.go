@@ -57,6 +57,28 @@ func TestReconcileIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestReconcileDefersDrainModeToHealthcheck(t *testing.T) {
+	deployment := testDeployment("")
+	deployment.Spec.Template.Spec.Containers = []corev1.Container{{
+		Name: "ssh-proxy",
+		Env: []corev1.EnvVar{{
+			Name:  "CONFIG_CHANGE_MODE",
+			Value: "drain",
+		}},
+	}}
+	client := fake.NewClientset(testConfigMap("42"), deployment)
+
+	if err := testController(client).reconcile(context.Background()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+
+	for _, action := range client.Actions() {
+		if action.GetVerb() == "patch" {
+			t.Fatal("reconcile rolled out a deployment configured to drain connections")
+		}
+	}
+}
+
 func TestReconcileRetriesConflict(t *testing.T) {
 	client := fake.NewClientset(testConfigMap("42"), testDeployment(""))
 	conflicts := 0

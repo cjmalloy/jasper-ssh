@@ -35,7 +35,9 @@ The optional controller image is published as
 watches one authorized-keys ConfigMap, and patches the configured SSH
 Deployment's pod-template annotation with the ConfigMap `resourceVersion`.
 Repeated events for an already represented version do not produce another
-patch.
+patch. When an SSH container explicitly sets `CONFIG_CHANGE_MODE=drain`, the
+controller leaves the rollout to the container health check so established
+connections can drain before that container restarts.
 
 | Environment variable | Description | Default |
 |----------------------|-------------|---------|
