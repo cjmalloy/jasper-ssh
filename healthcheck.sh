@@ -6,6 +6,11 @@ NORMALIZED_KEYS=/tmp/authorized_keys.normalized
 SHUTDOWN_LATCH=/tmp/authorized_keys_shutdown
 REVOCATION_LOCK=/tmp/authorized_keys_revocation_started
 
+log_message() {
+    printf '%s\n' "$*"
+    [ ! -w /proc/1/fd/1 ] || printf '%s\n' "$*" > /proc/1/fd/1
+}
+
 normalize_keys() {
     sed 's/^[	 ]*//;s/[	 ]*$//;/^[	 ]*#/d;/^$/d' "$1" |
         LC_ALL=C sort -u > "$2"
@@ -64,7 +69,7 @@ terminate_revoked_user_connections() {
         user=$(user_from_keys_path "$user_keys")
         user_has_revoked_key "$user_keys" "$current_keys" || continue
 
-        echo "An authorized key for $user was removed; terminating their SSH connections."
+        log_message "An authorized key for $user was removed; terminating their SSH connections."
         revoked_users="$revoked_users $user"
     done
 
@@ -81,7 +86,7 @@ remove_configured_users() {
         [ -f "$user_keys" ] || continue
         user=$(user_from_keys_path "$user_keys")
 
-        echo "Removing configuration for $user before restart."
+        log_message "Removing configuration for $user before restart."
         rm -f "/etc/nginx/conf.d/$user.conf"
         if awk -F: -v user="$user" '$1 == user { found = 1 } END { exit !found }' \
             /etc/passwd && ! deluser "$user"; then
@@ -103,6 +108,7 @@ record_key_change() {
     local current_keys="$1"
 
     touch "$SHUTDOWN_LATCH"
+    log_message "Authorized key change detected; shutdown latched in ${CONFIG_CHANGE_MODE:-restart} mode."
     if mkdir "$REVOCATION_LOCK" 2>/dev/null; then
         if ! cmp -s "$NORMALIZED_KEYS" "$current_keys"; then
             terminate_revoked_user_connections "$current_keys"
@@ -112,39 +118,21 @@ record_key_change() {
     fi
 }
 
-count_ssh_connections() {
-    awk '
-        $2 ~ /:0016$/ && $4 == "01" { count++ }
-        END { print count + 0 }
-    ' /proc/net/tcp /proc/net/tcp6 2>/dev/null
-}
-
 handle_latched_shutdown() {
-    local connection_count
-
     case "$CONFIG_CHANGE_MODE" in
         restart)
-            echo "The /config/authorized_keys file has been modified."
+            log_message "Shutdown latch active; restarting immediately."
             remove_configured_users || exit 1
             kill -TERM 1
             exit 1
             ;;
-        drain) ;;
+        drain) return 0 ;;
         *)
             echo "CONFIG_CHANGE_MODE must be restart or drain."
             kill -TERM 1
             exit 1
             ;;
     esac
-
-    connection_count=$(count_ssh_connections)
-    if [ "$connection_count" -eq 0 ]; then
-        echo "The /config/authorized_keys file has been modified."
-        kill -TERM 1
-        exit 1
-    fi
-    echo "The /config/authorized_keys file has been modified; draining $connection_count SSH connection(s)."
-    exit 0
 }
 
 service_check sshd
@@ -160,5 +148,5 @@ if [ -e "$NORMALIZED_KEYS" ] && [ -e /config/authorized_keys ]; then
     [ ! -e "$SHUTDOWN_LATCH" ] || handle_latched_shutdown
 fi
 
-echo "SSH and Nginx are running, and /config/authorized_keys is unchanged."
+echo "SSH and Nginx are running."
 exit 0

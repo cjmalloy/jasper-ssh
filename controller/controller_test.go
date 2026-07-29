@@ -57,6 +57,34 @@ func TestReconcileIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestReconcilePatchesDrainModeDeployment(t *testing.T) {
+	deployment := testDeployment("")
+	deployment.Spec.Template.Spec.Containers = []corev1.Container{{
+		Name: "ssh-proxy",
+		Env: []corev1.EnvVar{{
+			Name:  "CONFIG_CHANGE_MODE",
+			Value: "drain",
+		}},
+	}}
+	client := fake.NewClientset(testConfigMap("42"), deployment)
+
+	if err := testController(client).reconcile(context.Background()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+
+	deployment, err := client.AppsV1().Deployments("test").Get(
+		context.Background(),
+		"ssh",
+		metav1.GetOptions{},
+	)
+	if err != nil {
+		t.Fatalf("get deployment: %v", err)
+	}
+	if got := deployment.Spec.Template.Annotations[testAnnotation]; got != "42" {
+		t.Fatalf("annotation = %q, want 42", got)
+	}
+}
+
 func TestReconcileRetriesConflict(t *testing.T) {
 	client := fake.NewClientset(testConfigMap("42"), testDeployment(""))
 	conflicts := 0

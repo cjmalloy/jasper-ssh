@@ -57,7 +57,7 @@ services:
       http-backend:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "/healthcheck.sh || { touch /test-state/unhealthy; exit 1; }"]
+      test: ["CMD-SHELL", "/healthcheck.sh && touch /test-state/healthy || { touch /test-state/unhealthy; exit 1; }"]
       interval: 1s
       timeout: 5s
       retries: 20
@@ -89,6 +89,43 @@ services:
       timeout: 5s
       retries: 20
 
+  shutdown-hook:
+    build: .
+    network_mode: service:target-server
+    pid: service:target-server
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        # Compose uses double dollar signs below to pass literal dollar signs.
+        until [ -e /test-state/start-shutdown ]; do sleep 1; done
+        /shutdown.sh &
+        shutdown_pid=$$!
+        while awk '
+          # 0016 is SSH port 22; 0A is TCP_LISTEN.
+          $$2 ~ /:0016$$/ && $$4 == "0A" { listening = 1 }
+          END { exit !listening }
+        ' /proc/net/tcp /proc/net/tcp6 2>/dev/null; do
+          kill -0 "$$shutdown_pid" 2>/dev/null || exit 1
+          sleep 1
+        done
+        touch /test-state/shutdown-started
+        while kill -0 "$$shutdown_pid" 2>/dev/null; do
+          if [ -e /test-state/signal-shutdown ] &&
+             [ ! -e /test-state/shutdown-signaled ]; then
+            kill -TERM "$$shutdown_pid"
+            touch /test-state/shutdown-signaled
+          fi
+          sleep 1
+        done
+        wait "$$shutdown_pid"
+        touch /test-state/shutdown-complete
+    volumes:
+      - test-state:/test-state
+    depends_on:
+      target-server:
+        condition: service_healthy
+
   test-runner:
     build:
       context: .
@@ -103,6 +140,8 @@ services:
         condition: service_healthy
       target-server-restart:
         condition: service_healthy
+      shutdown-hook:
+        condition: service_started
     entrypoint: ["/bin/bash", "/workspace/tests/run_tests.sh"]
 
 volumes:
