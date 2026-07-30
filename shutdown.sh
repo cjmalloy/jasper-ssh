@@ -2,7 +2,11 @@
 # shellcheck shell=ash
 
 # shellcheck source=key-revocation.sh
-. "${KEY_REVOCATION_SCRIPT:-/key-revocation.sh}"
+if [ -r /key-revocation.sh ]; then
+    . /key-revocation.sh
+else
+    . ./key-revocation.sh
+fi
 
 apply_key_revocations() {
     local fp
@@ -120,6 +124,6 @@ shutdown_main() {
     drain_connections
 }
 
-if [ "${SHUTDOWN_SOURCE_ONLY:-false}" != true ]; then
+if [ "${0##*/}" = shutdown.sh ]; then
     shutdown_main "$@"
 fi

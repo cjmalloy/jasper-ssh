@@ -5,9 +5,7 @@ pass() { printf '\033[0;32m[PASS]\033[0m %s\n' "$*"; }
 fail() { printf '\033[0;31m[FAIL]\033[0m %s\n' "$*" >&2; exit 1; }
 
 script_dir=$(cd "$(dirname "$0")/.." && pwd)
-SHUTDOWN_SOURCE_ONLY=true
-KEY_REVOCATION_SCRIPT="$script_dir/key-revocation.sh"
-export SHUTDOWN_SOURCE_ONLY KEY_REVOCATION_SCRIPT
+cd "$script_dir"
 # shellcheck source=../shutdown.sh
 . "$script_dir/shutdown.sh"
 
