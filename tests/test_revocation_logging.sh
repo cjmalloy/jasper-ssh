@@ -124,3 +124,25 @@ signal_user_connections TERM alice
 assert_log_count "Sent SIGTERM" 2
 assert_log_count "Could not send SIGTERM" 2
 pass "A failed kill does not abort processing; remaining PIDs are still signalled"
+
+# ---------------------------------------------------------------------------
+# Test 5 – key_file_fingerprint is stable for identical normalized keys
+# ---------------------------------------------------------------------------
+
+_fp_a=$(mktemp)
+_fp_b=$(mktemp)
+printf 'ssh-rsa AAAA key1\nssh-rsa BBBB key2\n' > "$_fp_a"
+printf 'ssh-rsa AAAA key1\nssh-rsa BBBB key2\n' > "$_fp_b"
+
+fp1=$(key_file_fingerprint "$_fp_a")
+fp2=$(key_file_fingerprint "$_fp_b")
+[ "$fp1" = "$fp2" ] ||
+    fail "Identical content should produce identical fingerprints; got '$fp1' and '$fp2'"
+
+printf 'ssh-rsa CCCC key3\n' >> "$_fp_b"
+fp3=$(key_file_fingerprint "$_fp_b")
+[ "$fp1" != "$fp3" ] ||
+    fail "Different content should produce different fingerprints"
+
+rm -f "$_fp_a" "$_fp_b"
+pass "Key fingerprints are stable and change with normalized key content"

@@ -2,16 +2,39 @@
 # shellcheck shell=ash
 
 # shellcheck source=key-revocation.sh
-. /key-revocation.sh
+if [ -r /key-revocation.sh ]; then
+    . /key-revocation.sh
+else
+    . ./key-revocation.sh
+fi
 
 apply_key_revocations() {
-    [ -e /config/authorized_keys ] || return 0
-    normalize_keys /config/authorized_keys "$current_keys" || return 1
+    local fingerprint
+
+    if ! fetch_api_keys "$current_keys"; then
+        log_message "shutdown: Kubernetes API key fetch failed; drain mode requires API access"
+        return 1
+    fi
+
     if [ "$keys_initialized" = false ] ||
         ! cmp -s "$observed_keys" "$current_keys"; then
+        fingerprint=$(key_file_fingerprint "$current_keys")
+        if [ "$keys_initialized" = false ]; then
+            log_message "shutdown: initialized API keys (fingerprint: ${fingerprint})"
+        else
+            log_message "shutdown: API keys changed (fingerprint: ${fingerprint})"
+        fi
         terminate_revoked_user_connections "$current_keys"
         cp "$current_keys" "$observed_keys" || return 1
         keys_initialized=true
+    fi
+}
+
+restart_immediately() {
+    log_message "shutdown: authoritative API keys unavailable; falling back to restart mode"
+    if ! kill -TERM 1 2>/dev/null; then
+        log_message "shutdown: could not signal PID 1 for restart"
+        return 1
     fi
 }
 
@@ -52,28 +75,43 @@ stop_accepting_connections() {
     kill -TERM "$listener_pid" 2>/dev/null || true
 }
 
-current_keys=$(mktemp) || exit 1
-observed_keys=$(mktemp) || {
-    rm -f "$current_keys"
-    exit 1
+drain_connections() {
+    if ! apply_key_revocations; then
+        restart_immediately
+        return $?
+    fi
+
+    connection_count=$(count_ssh_connections) || return 1
+    if [ "$connection_count" -gt 0 ]; then
+        echo "Draining $connection_count SSH connection(s)."
+    fi
+    while [ "$connection_count" -gt 0 ]; do
+        sleep 5
+        if ! apply_key_revocations; then
+            restart_immediately
+            return $?
+        fi
+        connection_count=$(count_ssh_connections) || return 1
+    done
+
+    echo "All SSH connections drained."
 }
-keys_initialized=false
-sshd_stopped=false
-trap 'rm -f "$current_keys" "$observed_keys"' EXIT
-trap 'stop_accepting_connections' INT TERM
-stop_accepting_connections
 
-apply_key_revocations ||
-    echo "Could not apply authorized-key revocations; continuing shutdown drain." >&2
-connection_count=$(count_ssh_connections) || exit 1
-if [ "$connection_count" -gt 0 ]; then
-    echo "Draining $connection_count SSH connection(s)."
+shutdown_main() {
+    current_keys=$(mktemp) || return 1
+    observed_keys=$(mktemp) || {
+        rm -f "$current_keys"
+        return 1
+    }
+    keys_initialized=false
+    sshd_stopped=false
+    trap 'rm -f "$current_keys" "$observed_keys"' EXIT
+    trap 'stop_accepting_connections' INT TERM
+    log_message "Starting SSH connection drain."
+    stop_accepting_connections
+    drain_connections
+}
+
+if [ "${0##*/}" = shutdown.sh ]; then
+    shutdown_main "$@"
 fi
-while [ "$connection_count" -gt 0 ]; do
-    sleep 5
-    apply_key_revocations ||
-        echo "Could not apply authorized-key revocations; continuing shutdown drain." >&2
-    connection_count=$(count_ssh_connections) || exit 1
-done
-
-echo "All SSH connections drained."

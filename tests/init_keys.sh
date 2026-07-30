@@ -12,6 +12,9 @@ ssh-keygen -q -t rsa -b 3072 -N "" -f "$key_dir/host_key"
 
 cat "$key_dir/alice.pub" "$key_dir/bob.pub" "$key_dir/charlie.pub" \
     "$key_dir/alice_second.pub" > "$key_dir/authorized_keys"
+printf '%s' integration-test > "$key_dir/token"
+printf '%s' test > "$key_dir/namespace"
+touch "$key_dir/ca.crt"
 chmod 600 "$key_dir/alice" "$key_dir/alice_second" "$key_dir/bob" \
     "$key_dir/charlie" "$key_dir/host_key"
 touch "$key_dir/ready"

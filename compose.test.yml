@@ -38,8 +38,10 @@ services:
     build: .
     restart: unless-stopped
     environment:
+      AUTHORIZED_KEYS_CONFIGMAP_NAME: authorized-keys
       CONFIG_CHANGE_MODE: drain
       LOCAL_ORIGIN: "@test-origin"
+      NAMESPACE: test
       READ_ACCESS: test-read
       TAG_READ_ACCESS: test-tag-read
       TAG_WRITE_ACCESS: test-tag-write
@@ -50,7 +52,9 @@ services:
     volumes:
       - ssh-config:/config
       - ssh-config:/secrets:ro
+      - ssh-config:/var/run/secrets/kubernetes.io/serviceaccount:ro
       - test-state:/test-state
+      - ./tests/mock-kubernetes-curl.sh:/usr/local/bin/curl:ro
     depends_on:
       keygen:
         condition: service_healthy
@@ -93,6 +97,9 @@ services:
     build: .
     network_mode: service:target-server
     pid: service:target-server
+    environment:
+      AUTHORIZED_KEYS_CONFIGMAP_NAME: authorized-keys
+      NAMESPACE: test
     entrypoint:
       - /bin/sh
       - -c
