@@ -48,8 +48,8 @@ normalize_keys() {
 # keys to $1.  The optional second argument overrides the service-account
 # directory (default: /var/run/secrets/kubernetes.io/serviceaccount).
 # Requires AUTHORIZED_KEYS_CONFIGMAP_NAME and NAMESPACE (or the SA namespace
-# file) to be set.  Returns 0 on success, 1 on any failure (non-fatal;
-# callers fall back to the mounted volume).  Never logs key material.
+# file) to be set. Returns 0 on success and 1 on any failure. Never logs key
+# material.
 fetch_api_keys() {
     local out="$1"
     local sa_dir="${2:-/var/run/secrets/kubernetes.io/serviceaccount}"
