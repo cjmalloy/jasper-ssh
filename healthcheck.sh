@@ -39,18 +39,13 @@ record_key_change() {
     local current_keys="$1"
 
     touch "$SHUTDOWN_LATCH"
-    log_message "healthcheck: semantic key change detected; shutdown latched in ${CONFIG_CHANGE_MODE:-restart} mode."
+    log_message "Authorized key change detected; shutdown latched in ${CONFIG_CHANGE_MODE:-restart} mode."
     if mkdir "$REVOCATION_LOCK" 2>/dev/null; then
-        log_message "healthcheck: acquired revocation lock"
         if ! cmp -s "$NORMALIZED_KEYS" "$current_keys"; then
             terminate_revoked_user_connections "$current_keys"
             cp "$current_keys" "$NORMALIZED_KEYS"
-        else
-            log_message "healthcheck: keys already up to date (concurrent update); skipping revocations"
         fi
         rmdir "$REVOCATION_LOCK"
-    else
-        log_message "healthcheck: revocation already in progress; skipping"
     fi
 }
 
@@ -75,22 +70,13 @@ service_check sshd
 service_check nginx
 
 if [ -e "$NORMALIZED_KEYS" ] && [ -e /config/authorized_keys ]; then
-    log_path_metadata "healthcheck:" /config/authorized_keys
     current_keys=$(mktemp)
     trap 'rm -f "$current_keys"' EXIT
-    if normalize_keys /config/authorized_keys "$current_keys"; then
-        _hc_fp=$(key_file_fingerprint "$current_keys")
-        log_message "healthcheck: current keys fingerprint: ${_hc_fp}"
-        if ! cmp -s "$NORMALIZED_KEYS" "$current_keys"; then
-            record_key_change "$current_keys"
-        else
-            log_message "healthcheck: keys unchanged"
-        fi
+    if normalize_keys /config/authorized_keys "$current_keys" &&
+        ! cmp -s "$NORMALIZED_KEYS" "$current_keys"; then
+        record_key_change "$current_keys"
     fi
-    if [ -e "$SHUTDOWN_LATCH" ]; then
-        log_message "healthcheck: shutdown latch is active"
-        handle_latched_shutdown
-    fi
+    [ ! -e "$SHUTDOWN_LATCH" ] || handle_latched_shutdown
 fi
 
 echo "SSH and Nginx are running."

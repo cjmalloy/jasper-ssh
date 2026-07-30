@@ -25,11 +25,6 @@ assert_log_contains() {
     grep -Fq -- "$1" "$_log_file" ||
         fail "Expected log line not found: '$1' (log: $(cat "$_log_file"))"
 }
-assert_log_not_contains() {
-    if grep -Fq -- "$1" "$_log_file" 2>/dev/null; then
-        fail "Unexpected log line found: '$1' (log: $(cat "$_log_file"))"
-    fi
-}
 
 # Set up mock service-account directory.
 printf '%s' 'mock-sa-token' > "$_sa_dir/token"
@@ -78,8 +73,9 @@ grep -Fq "ssh-ed25519 AAAA key1" "$_out" ||
     fail "output should contain first key"
 grep -Fq "ssh-rsa BBBB key2" "$_out" ||
     fail "output should contain second key"
-assert_log_contains "key-revocation: fetched keys from API (test-ns/jasper-authorized-keys)"
-pass "API fetch success: normalized keys written to output file and fetch logged"
+[ ! -s "$_log_file" ] ||
+    fail "expected no log output after successful fetch, got: $(cat "$_log_file")"
+pass "API fetch success: normalized keys written without diagnostic logging"
 
 # ---------------------------------------------------------------------------
 # Test 2 - non-200 HTTP status returns 1 and logs failure
@@ -169,4 +165,3 @@ if fetch_api_keys "$_out" "$_sa_dir"; then
 fi
 assert_log_contains "key-revocation: API response contained no authorized_keys field"
 pass "Missing authorized_keys field in response returns failure and logs it"
-

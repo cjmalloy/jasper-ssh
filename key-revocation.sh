@@ -6,39 +6,6 @@ log_message() {
     [ ! -w /proc/1/fd/1 ] || printf '%s\n' "$*" > /proc/1/fd/1
 }
 
-# Compute a non-sensitive fingerprint from a normalized-keys file.
-# Output: "<N> lines, hash=<16-char-prefix>"
-key_file_fingerprint() {
-    local file="$1"
-    local count hash
-    count=$(wc -l < "$file" 2>/dev/null | tr -d ' ' || echo "?")
-    hash=$(sha256sum "$file" 2>/dev/null | cut -c1-16 \
-           || md5sum "$file" 2>/dev/null | cut -c1-16 \
-           || echo "unavailable")
-    printf '%s lines, hash=%s' "$count" "$hash"
-}
-
-# Log file metadata (mtime, symlink target) for a given path.
-# Degrades gracefully when stat or readlink are unavailable.
-log_path_metadata() {
-    local prefix="$1"
-    local path="$2"
-    local mtime target
-    if [ ! -e "$path" ]; then
-        log_message "${prefix} ${path}: not found"
-        return
-    fi
-    mtime=$(stat -c '%y' "$path" 2>/dev/null \
-            || stat -f '%Sm' "$path" 2>/dev/null \
-            || echo "unavailable")
-    target=$(readlink "$path" 2>/dev/null || echo "")
-    if [ -n "$target" ]; then
-        log_message "${prefix} ${path}: exists, mtime=${mtime}, symlink->${target}"
-    else
-        log_message "${prefix} ${path}: exists, mtime=${mtime}"
-    fi
-}
-
 normalize_keys() {
     sed 's/^[	 ]*//;s/[	 ]*$//;/^[	 ]*#/d;/^$/d' "$1" |
         LC_ALL=C sort -u > "$2"
@@ -106,7 +73,6 @@ fetch_api_keys() {
     normalize_keys "$tmp_keys" "$out"
     local ret=$?
     rm -f "$tmp_keys"
-    log_message "key-revocation: fetched keys from API (${ns}/${cm_name})"
     return $ret
 }
 
@@ -131,46 +97,19 @@ signal_user_connections() {
     local user="$2"
     local escaped_user
     local process_name
-    local pids
     local pid
-    local proc_desc
-    local remaining
-    local count
     escaped_user=$(printf '%s' "$user" | sed 's/[][\\.^$*+?{}|()]/\\&/g')
 
     for process_name in sshd sshd-session; do
-        log_message "key-revocation: checking for ${process_name} sessions of ${user}"
-        pids=$(pgrep -f "^${process_name}: ${escaped_user}([ @]|$)" 2>/dev/null || true)
-        if [ -z "$pids" ]; then
-            log_message "key-revocation: no ${process_name} session found for ${user}"
-            continue
-        fi
-        printf '%s\n' "$pids" | while IFS= read -r pid; do
-            if _desc=$(2>/dev/null tr '\0' ' ' < "/proc/${pid}/cmdline"); then
-                proc_desc=$(printf '%.80s' "$_desc")
-            else
-                proc_desc="unavailable"
-            fi
-            log_message "key-revocation: matched ${process_name} PID ${pid}: ${proc_desc}"
-            if kill "-$signal" "$pid" 2>/dev/null; then
-                log_message "Sent SIG${signal} to ${process_name} session for ${user} (PID ${pid})."
-            else
-                log_message "Could not send SIG${signal} to ${process_name} session for ${user} (PID ${pid}); it may have already exited."
-            fi
-        done
+        pgrep -f "^${process_name}: ${escaped_user}([ @]|$)" 2>/dev/null |
+            while IFS= read -r pid; do
+                if kill "-$signal" "$pid" 2>/dev/null; then
+                    log_message "Sent SIG${signal} to ${process_name} session for ${user} (PID ${pid})."
+                else
+                    log_message "Could not send SIG${signal} to ${process_name} session for ${user} (PID ${pid}); it may have already exited."
+                fi
+            done
     done
-
-    # Log whether any session processes remain after signaling.
-    remaining=0
-    for process_name in sshd sshd-session; do
-        count=$(pgrep -f "^${process_name}: ${escaped_user}([ @]|$)" 2>/dev/null | wc -l || echo 0)
-        remaining=$((remaining + count))
-    done
-    if [ "$remaining" -gt 0 ]; then
-        log_message "key-revocation: ${remaining} session(s) remain for ${user} after SIG${signal}"
-    else
-        log_message "key-revocation: no sessions remain for ${user} after SIG${signal}"
-    fi
 }
 
 signal_users() {
@@ -188,30 +127,15 @@ terminate_revoked_user_connections() {
     local revoked_users=
     local user_keys
     local user
-    local key_count
-    local fp
-
-    fp=$(key_file_fingerprint "$current_keys")
-    log_message "key-revocation: checking for revocations, current keys: ${fp}"
 
     for user_keys in /home/*/.ssh/authorized_keys; do
         [ -f "$user_keys" ] || continue
         user=$(user_from_keys_path "$user_keys")
-        key_count=$(wc -l < "$user_keys" 2>/dev/null | tr -d ' ' || echo "?")
-        log_message "key-revocation: evaluating ${user} (${key_count} configured key(s))"
-        if user_has_revoked_key "$user_keys" "$current_keys"; then
-            log_message "An authorized key for $user was removed; terminating their SSH connections."
-            revoked_users="$revoked_users $user"
-        else
-            log_message "key-revocation: no revoked keys for ${user}"
-        fi
-    done
+        user_has_revoked_key "$user_keys" "$current_keys" || continue
 
-    if [ -z "$revoked_users" ]; then
-        log_message "key-revocation: no revoked users"
-    else
-        log_message "key-revocation: revoked user(s):${revoked_users}"
-    fi
+        log_message "An authorized key for $user was removed; terminating their SSH connections."
+        revoked_users="$revoked_users $user"
+    done
 
     signal_users TERM "$revoked_users"
     [ -z "$revoked_users" ] || sleep 1
