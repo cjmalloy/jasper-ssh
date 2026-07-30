@@ -6,6 +6,22 @@ log_message() {
     [ ! -w /proc/1/fd/1 ] || printf '%s\n' "$*" > /proc/1/fd/1
 }
 
+# Compute a non-sensitive fingerprint from a normalized-keys file.
+key_file_fingerprint() {
+    local file="$1"
+    local count hash output
+
+    count=$(wc -l < "$file" 2>/dev/null | tr -d ' ' || echo "?")
+    if output=$(sha256sum "$file" 2>/dev/null); then
+        hash=${output%% *}
+    elif output=$(md5sum "$file" 2>/dev/null); then
+        hash=${output%% *}
+    else
+        hash=unavailable
+    fi
+    printf '%s lines, hash=%.16s' "$count" "$hash"
+}
+
 normalize_keys() {
     sed 's/^[	 ]*//;s/[	 ]*$//;/^[	 ]*#/d;/^$/d' "$1" |
         LC_ALL=C sort -u > "$2"

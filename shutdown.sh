@@ -9,6 +9,8 @@ else
 fi
 
 apply_key_revocations() {
+    local fingerprint
+
     if ! fetch_api_keys "$current_keys"; then
         log_message "shutdown: Kubernetes API key fetch failed; drain mode requires API access"
         return 1
@@ -16,6 +18,12 @@ apply_key_revocations() {
 
     if [ "$keys_initialized" = false ] ||
         ! cmp -s "$observed_keys" "$current_keys"; then
+        fingerprint=$(key_file_fingerprint "$current_keys")
+        if [ "$keys_initialized" = false ]; then
+            log_message "shutdown: initialized API keys (fingerprint: ${fingerprint})"
+        else
+            log_message "shutdown: API keys changed (fingerprint: ${fingerprint})"
+        fi
         terminate_revoked_user_connections "$current_keys"
         cp "$current_keys" "$observed_keys" || return 1
         keys_initialized=true
@@ -99,6 +107,7 @@ shutdown_main() {
     sshd_stopped=false
     trap 'rm -f "$current_keys" "$observed_keys"' EXIT
     trap 'stop_accepting_connections' INT TERM
+    log_message "Starting SSH connection drain."
     stop_accepting_connections
     drain_connections
 }

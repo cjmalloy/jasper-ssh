@@ -38,6 +38,28 @@ fi
 assert_log_contains "shutdown: Kubernetes API key fetch failed; drain mode requires API access"
 pass "Drain mode rejects an unavailable API without using the mounted volume"
 
+_test_key_version=1
+fetch_api_keys() {
+    printf 'ssh-rsa AAAA key%s\n' "$_test_key_version" > "$1"
+}
+terminate_revoked_user_connections() { :; }
+keys_initialized=false
+> "$_log_file"
+> "$observed_keys"
+
+apply_key_revocations
+assert_log_contains "shutdown: initialized API keys (fingerprint: 1 lines, hash="
+
+> "$_log_file"
+apply_key_revocations
+[ ! -s "$_log_file" ] ||
+    fail "Unchanged API keys produced polling logs: $(cat "$_log_file")"
+
+_test_key_version=2
+apply_key_revocations
+assert_log_contains "shutdown: API keys changed (fingerprint: 1 lines, hash="
+pass "Shutdown logs initial and changed fingerprints without unchanged-key polling logs"
+
 kill() { printf '%s\n' "$*" > "$_tmp_dir/kill"; }
 restart_immediately
 grep -Fqx -- "-TERM 1" "$_tmp_dir/kill" ||
