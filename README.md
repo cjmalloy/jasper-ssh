@@ -15,7 +15,9 @@ Create an SSH authenticated [jasper](https://github.com/cjmalloy/jasper) proxy
 | `TAG_READ_ACCESS`    | Sets `Tag-Read-Access` header. Requires upstream server to have `JASPER_ALLOW_AUTH_HEADERS` set.                                                                                                               |                          |
 | `TAG_WRITE_ACCESS`   | Sets `Tag-Write-Access` header. Requires upstream server to have `JASPER_ALLOW_AUTH_HEADERS` set.                                                                                                              |                          |
 | `SSHD_LOG_LEVEL`     | Sets the LogLevel in sshd_config.                                                                                                                                                                              | INFO                     |
-| `CONFIG_CHANGE_MODE` | Handles a semantic `/config/authorized_keys` change: `restart` exits the server immediately; `drain` terminates affected sessions while remaining healthy for a Deployment rollout.                              | `restart`                |
+| `CONFIG_CHANGE_MODE` | Handles a semantic `/config/authorized_keys` change: `restart` exits immediately; `drain` remains healthy for a Deployment rollout and requires Kubernetes API access.                                           | `restart`                |
+| `AUTHORIZED_KEYS_CONFIGMAP_NAME` | ConfigMap fetched from the Kubernetes API while draining. Required when `CONFIG_CHANGE_MODE=drain`.                                                                                                 |                          |
+| `NAMESPACE`          | Namespace containing the authorized-keys ConfigMap. If unset, the service-account namespace is used.                                                                                                           |                          |
 
 ## Authorized-key changes
 
@@ -26,7 +28,10 @@ remains latched even if the original file contents are restored. In the default
 `restart` mode, the server exits immediately so a container restart policy can
 replace it and load the new keys. In `drain` mode, the health check applies
 per-user revocations but remains healthy; the rollout controller replaces the
-pod so its `preStop` hook can drain the remaining sessions.
+pod so its `preStop` hook can drain the remaining sessions. If the hook cannot
+fetch authoritative keys from the Kubernetes API, it immediately falls back to
+restart behavior instead of draining against a potentially stale projected
+volume.
 
 ## Kubernetes termination draining
 
@@ -52,9 +57,12 @@ spec:
 
 The hook immediately stops the SSH listener so no new connections are accepted,
 applies the same per-user revocations as the health check, then waits for the
-remaining established SSH connections to close. It continues checking the
-mounted keys while it drains so revocations projected after shutdown starts are
-also applied. It has no internal timeout. The one-week
+remaining established SSH connections to close. It continues fetching the
+ConfigMap from the Kubernetes API while it drains so revocations are applied
+without waiting for projected-volume updates. Drain mode requires
+`AUTHORIZED_KEYS_CONFIGMAP_NAME` and `get` access to that ConfigMap for the SSH
+pod's service account. If an API fetch fails before or during draining, the hook
+signals the container to restart immediately. It has no internal timeout. The one-week
 `terminationGracePeriodSeconds` is only an upper bound; disruptions or
 administrative deletion can terminate sessions earlier.
 `maxUnavailable: 0` preserves availability during an ordinary rollout, while
