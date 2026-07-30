@@ -56,10 +56,23 @@ fetch_api_keys() {
     local cm_name ns token http_status tmp_raw tmp_keys
 
     cm_name="${AUTHORIZED_KEYS_CONFIGMAP_NAME:-}"
-    [ -n "$cm_name" ] || return 1
+    if [ -z "$cm_name" ]; then
+        log_message "key-revocation: AUTHORIZED_KEYS_CONFIGMAP_NAME is not set; cannot fetch API keys"
+        return 1
+    fi
 
     ns="${NAMESPACE:-}"
-    [ -n "$ns" ] || ns=$(cat "${sa_dir}/namespace" 2>/dev/null) || return 1
+    if [ -z "$ns" ]; then
+        if [ ! -r "${sa_dir}/namespace" ]; then
+            log_message "key-revocation: namespace is not set and SA namespace is not readable at ${sa_dir}/namespace"
+            return 1
+        fi
+        ns=$(cat "${sa_dir}/namespace") || return 1
+        if [ -z "$ns" ]; then
+            log_message "key-revocation: SA namespace is empty at ${sa_dir}/namespace"
+            return 1
+        fi
+    fi
 
     if [ ! -r "${sa_dir}/token" ]; then
         log_message "key-revocation: SA token not readable at ${sa_dir}/token; skipping API fetch"

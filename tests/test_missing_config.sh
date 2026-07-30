@@ -8,6 +8,16 @@ fail() {
 }
 
 if output=$(
+    env -u AUTHORIZED_KEYS_CONFIGMAP_NAME CONFIG_CHANGE_MODE=drain \
+        /docker-entrypoint.d/40-setup-users.sh 2>&1
+); then
+    fail "Startup succeeded in drain mode without a ConfigMap name"
+fi
+echo "$output" | grep -Fq \
+    "AUTHORIZED_KEYS_CONFIGMAP_NAME is required when CONFIG_CHANGE_MODE=drain." ||
+    fail "Startup did not explain that drain mode requires a ConfigMap name"
+
+if output=$(
     env -u AUTHORIZED_KEYS -u HOST_KEY \
         /docker-entrypoint.d/40-setup-users.sh 2>&1
 ); then

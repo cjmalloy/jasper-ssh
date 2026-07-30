@@ -3,6 +3,12 @@
 echo "Writing SSHD Config and NGINX Configs for Users"
 echo "CONFIG_CHANGE_MODE: ${CONFIG_CHANGE_MODE:-restart}"
 
+if [ "${CONFIG_CHANGE_MODE:-restart}" = drain ] &&
+    [ -z "${AUTHORIZED_KEYS_CONFIGMAP_NAME:-}" ]; then
+    echo "AUTHORIZED_KEYS_CONFIGMAP_NAME is required when CONFIG_CHANGE_MODE=drain." >&2
+    exit 1
+fi
+
 base_port=38022
 sshd_config="/etc/ssh/sshd_config"
 
