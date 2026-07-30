@@ -48,7 +48,7 @@ fetch_api_keys() {
         log_message "key-revocation: SA token not readable at ${sa_dir}/token; skipping API fetch"
         return 1
     fi
-    token=$(cat "${sa_dir}/token") || return 1
+    token=$(tr -d '\r\n' < "${sa_dir}/token") || return 1
 
     tmp_raw=$(mktemp) || return 1
     tmp_keys=$(mktemp) || { rm -f "$tmp_raw"; return 1; }
