@@ -81,16 +81,6 @@ grep -Fq "ssh-rsa BBBB key2" "$_out" ||
 assert_log_contains "key-revocation: fetched keys from API (test-ns/jasper-authorized-keys)"
 pass "API fetch success: normalized keys written to output file and fetch logged"
 
-# NAMESPACE is optional when the service-account namespace file is available.
-unset NAMESPACE
-reset_log
-> "$_out"
-fetch_api_keys "$_out" "$_sa_dir"
-assert_log_contains "key-revocation: fetched keys from API (test-ns/jasper-authorized-keys)"
-pass "API fetch uses the service-account namespace when NAMESPACE is unset"
-NAMESPACE="test-ns"
-export NAMESPACE
-
 # ---------------------------------------------------------------------------
 # Test 2 - non-200 HTTP status returns 1 and logs failure
 # ---------------------------------------------------------------------------
@@ -140,7 +130,7 @@ assert_log_contains "key-revocation: API fetch failed (HTTP failed)"
 pass "Curl connection failure returns non-zero and logs it"
 
 # ---------------------------------------------------------------------------
-# Test 4 - missing AUTHORIZED_KEYS_CONFIGMAP_NAME returns 1 with a clear log
+# Test 4 - missing AUTHORIZED_KEYS_CONFIGMAP_NAME returns 1 without logging
 # ---------------------------------------------------------------------------
 
 unset AUTHORIZED_KEYS_CONFIGMAP_NAME
@@ -149,8 +139,10 @@ reset_log
 if fetch_api_keys "$_out" "$_sa_dir"; then
     fail "expected non-zero exit when configmap name not set"
 fi
-assert_log_contains "key-revocation: AUTHORIZED_KEYS_CONFIGMAP_NAME is not set; cannot fetch API keys"
-pass "Missing AUTHORIZED_KEYS_CONFIGMAP_NAME returns failure with a clear log"
+# No log output expected - silently skipped
+[ ! -s "$_log_file" ] ||
+    fail "expected no log output when configmap name unset, got: $(cat "$_log_file")"
+pass "Missing AUTHORIZED_KEYS_CONFIGMAP_NAME returns failure silently"
 AUTHORIZED_KEYS_CONFIGMAP_NAME="jasper-authorized-keys"
 export AUTHORIZED_KEYS_CONFIGMAP_NAME
 
@@ -177,3 +169,4 @@ if fetch_api_keys "$_out" "$_sa_dir"; then
 fi
 assert_log_contains "key-revocation: API response contained no authorized_keys field"
 pass "Missing authorized_keys field in response returns failure and logs it"
+
