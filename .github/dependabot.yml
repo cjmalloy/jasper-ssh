@@ -17,3 +17,7 @@ updates:
   directory: /controller
   schedule:
     interval: daily
+  groups:
+    k8s:
+      patterns:
+        - "k8s.io/*"
