@@ -19,7 +19,6 @@ UseDNS no
 PermitOpen none
 Subsystem sftp internal-sftp
 ForceCommand /bin/false
-ChrootDirectory /opt/chrooted-sftp/%u
 "
 echo "$sshdConfig" > "$sshd_config"
 
@@ -97,6 +96,7 @@ setup_user() {
     echo "    Banner $home_dir/banner.txt" >> "$sshd_config"
 
     # Iterate over the list and check for the string
+    sftp=""
     for tag in $STORAGE_ACCESS; do
         if [ "$tag" = "$user_tag$user_origin" ]; then
             sftp=true
@@ -104,8 +104,8 @@ setup_user() {
     done
 
     # Give user SFTP access
-    if [ -z "$sftp" ]; then
-      echo Chroot User
+    if [ -n "$sftp" ]; then
+      echo "Chroot User"
       user_chroot="/opt/chrooted-sftp/$user"
       mkdir -p "$user_chroot"
 
@@ -120,6 +120,7 @@ setup_user() {
       chown root:root "$user_chroot"
       chmod 755 "$user_chroot"
 
+      echo "    ChrootDirectory $user_chroot" >> "$sshd_config"
       echo "    ForceCommand internal-sftp" >> "$sshd_config"
     fi
 
