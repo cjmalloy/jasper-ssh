@@ -57,8 +57,8 @@ go build ./...
 
 ## Integration tests (Docker Compose)
 
-Run exactly what CI (`.github/workflows/integration-tests.yml`) runs, from the
-repository root:
+Run the integration suite from the repository root. This CI-equivalent sequence
+adds an explicit initial cleanup so local reruns start from clean volumes:
 
 ```sh
 docker compose -f compose.test.yml down -v   # always start from clean volumes
