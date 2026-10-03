@@ -13,3 +13,11 @@ updates:
   directory: /
   schedule:
     interval: daily
+- package-ecosystem: gomod
+  directory: /controller
+  schedule:
+    interval: daily
+  groups:
+    k8s:
+      patterns:
+        - "k8s.io/*"

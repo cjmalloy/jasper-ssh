@@ -1,0 +1,156 @@
+services:
+  keygen:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile
+    volumes:
+      - ssh-config:/workspace/ssh_config
+    entrypoint: ["/bin/bash", "/workspace/tests/init_keys.sh"]
+    healthcheck:
+      test: ["CMD", "test", "-f", "/workspace/ssh_config/ready"]
+      interval: 1s
+      timeout: 1s
+      retries: 10
+
+  http-backend:
+    image: python:3.14-alpine
+    command: ["python3", "/tests/http_backend.py"]
+    volumes:
+      - ./tests:/tests:ro
+
+  config-tester:
+    build: .
+    entrypoint: ["/bin/sh", "/tests/test_missing_config.sh"]
+    volumes:
+      - ./tests:/tests:ro
+      - ssh-config:/keys:ro
+      - test-state:/test-state
+    depends_on:
+      keygen:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "test", "-f", "/test-state/config-tested"]
+      interval: 1s
+      timeout: 1s
+      retries: 10
+
+  target-server:
+    build: .
+    restart: unless-stopped
+    environment:
+      AUTHORIZED_KEYS_CONFIGMAP_NAME: authorized-keys
+      CONFIG_CHANGE_MODE: drain
+      LOCAL_ORIGIN: "@test-origin"
+      NAMESPACE: test
+      READ_ACCESS: test-read
+      TAG_READ_ACCESS: test-tag-read
+      TAG_WRITE_ACCESS: test-tag-write
+      TOKEN: test-token
+      UPSTREAM: http://http-backend:8080/
+      USER_ROLE: test-role
+      WRITE_ACCESS: test-write
+    volumes:
+      - ssh-config:/config
+      - ssh-config:/secrets:ro
+      - ssh-config:/var/run/secrets/kubernetes.io/serviceaccount:ro
+      - test-state:/test-state
+      - ./tests/mock-kubernetes-curl.sh:/usr/local/bin/curl:ro
+    depends_on:
+      keygen:
+        condition: service_healthy
+      http-backend:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "{ [ -e /test-state/start-shutdown ] || /healthcheck.sh; } && touch /test-state/healthy || { touch /test-state/unhealthy; exit 1; }"]
+      interval: 1s
+      timeout: 5s
+      retries: 20
+
+  target-server-restart:
+    build: .
+    restart: unless-stopped
+    environment:
+      LOCAL_ORIGIN: "@test-origin"
+      READ_ACCESS: test-read
+      TAG_READ_ACCESS: test-tag-read
+      TAG_WRITE_ACCESS: test-tag-write
+      TOKEN: test-token
+      UPSTREAM: http://http-backend:8080/
+      USER_ROLE: test-role
+      WRITE_ACCESS: test-write
+    volumes:
+      - ssh-config:/config
+      - ssh-config:/secrets:ro
+      - test-state:/test-state
+    depends_on:
+      keygen:
+        condition: service_healthy
+      http-backend:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "/healthcheck.sh"]
+      interval: 1s
+      timeout: 5s
+      retries: 20
+
+  shutdown-hook:
+    build: .
+    network_mode: service:target-server
+    pid: service:target-server
+    environment:
+      AUTHORIZED_KEYS_CONFIGMAP_NAME: authorized-keys
+      NAMESPACE: test
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        # Compose uses double dollar signs below to pass literal dollar signs.
+        until [ -e /test-state/start-shutdown ]; do sleep 1; done
+        chroot /proc/1/root /shutdown.sh &
+        shutdown_pid=$$!
+        while awk '
+          # 0016 is SSH port 22; 0A is TCP_LISTEN.
+          $$2 ~ /:0016$$/ && $$4 == "0A" { listening = 1 }
+          END { exit !listening }
+        ' /proc/net/tcp /proc/net/tcp6 2>/dev/null; do
+          kill -0 "$$shutdown_pid" 2>/dev/null || exit 1
+          sleep 1
+        done
+        touch /test-state/shutdown-started
+        while kill -0 "$$shutdown_pid" 2>/dev/null; do
+          if [ -e /test-state/signal-shutdown ] &&
+             [ ! -e /test-state/shutdown-signaled ]; then
+            kill -TERM "$$shutdown_pid"
+            touch /test-state/shutdown-signaled
+          fi
+          sleep 1
+        done
+        wait "$$shutdown_pid"
+        touch /test-state/shutdown-complete
+    volumes:
+      - test-state:/test-state
+    depends_on:
+      target-server:
+        condition: service_healthy
+
+  test-runner:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile
+    volumes:
+      - ssh-config:/workspace/ssh_config
+      - test-state:/workspace/test_state
+    depends_on:
+      config-tester:
+        condition: service_healthy
+      target-server:
+        condition: service_healthy
+      target-server-restart:
+        condition: service_healthy
+      shutdown-hook:
+        condition: service_started
+    entrypoint: ["/bin/bash", "/workspace/tests/run_tests.sh"]
+
+volumes:
+  ssh-config:
+  test-state:

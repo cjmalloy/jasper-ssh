@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jasper-ssh-controller
+  namespace: jasper
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jasper-ssh-controller
+  namespace: jasper
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["authorized-keys"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["jasper-ssh"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jasper-ssh-controller
+  namespace: jasper
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: jasper-ssh-controller
+subjects:
+  - kind: ServiceAccount
+    name: jasper-ssh-controller
+    namespace: jasper
