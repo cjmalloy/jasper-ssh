@@ -52,7 +52,7 @@ go build ./...
 - If you change dependencies, run `go mod tidy` and commit `go.mod` and
   `go.sum` together. `go mod tidy -diff` must print nothing. Do not hand-edit
   `go.sum`.
-- Format with `gofmt -l .` (must print nothing).
+- Check formatting with `gofmt -l .` (must print nothing); run `gofmt -w` on any listed files.
 - Build the image with `docker build controller` (about 75 seconds when cold).
 
 ## Integration tests (Docker Compose)
