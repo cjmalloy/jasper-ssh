@@ -19,8 +19,8 @@ environment variables.
 | `tests/test_api_fetch.sh`, `tests/test_revocation_logging.sh`, `tests/test_shutdown_api_requirement.sh` | Standalone Bash unit tests for the shell scripts (not run by CI). |
 | `tests/mock-kubernetes-curl.sh` | Mounted over `/usr/local/bin/curl` in `target-server` to fake the Kubernetes API. |
 
-There is no Node.js/npm in this repo. The only lockfile is
-`controller/go.sum`.
+There is no Node.js/npm or JavaScript package lockfile in this repo. Go
+module metadata is stored in `controller/go.mod` and `controller/go.sum`.
 
 ## Shell script conventions
 
