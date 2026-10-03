@@ -17,6 +17,7 @@ printf '%s' test > "$key_dir/namespace"
 touch "$key_dir/ca.crt"
 chmod 600 "$key_dir/alice" "$key_dir/alice_second" "$key_dir/bob" \
     "$key_dir/charlie" "$key_dir/host_key"
+printf '%s\n' backup > /workspace/storage/backup.zip
 touch "$key_dir/ready"
 
 tail -f /dev/null

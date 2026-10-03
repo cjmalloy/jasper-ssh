@@ -70,7 +70,7 @@ docker compose -f compose.test.yml up --build --no-deps \
 docker compose -f compose.test.yml down -v
 ```
 
-A clean run takes about 45 seconds when images are cached. It ends with 16
+A clean run takes about 45 seconds when images are cached. It ends with 18
 `[PASS]` lines between `=== TEST SUMMARY START ===` and
 `=== TEST SUMMARY END ===`, then `test-runner-1 exited with code 0`.
 
