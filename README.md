@@ -34,10 +34,34 @@ in `/var/lib/jasper/<origin>`, including the leading `@`, and uses
 origin does not exist, a warning is logged and that user gets no storage access.
 
 Each user is chrooted into `/opt/chrooted-sftp/<user>`, and the storage folder is
-bind-mounted read-only on `/storage`. The SFTP session starts in that folder. Bind
-mounting requires the `SYS_ADMIN` capability, and on hosts with AppArmor an
-unconfined profile. Without them a warning is logged and storage access is
-skipped. Users with storage access can still open their API tunnel.
+bind-mounted read-only on `/storage`. The SFTP session starts in that folder.
+Users with storage access can still open their API tunnel. Other users keep
+port forwarding only and cannot open an SFTP session.
+
+Bind mounting requires `--cap-add SYS_ADMIN`, and on hosts with AppArmor
+`--security-opt apparmor=unconfined`. Without them a warning is logged and
+storage access is skipped. In Docker Compose:
+
+```yaml
+services:
+  jasper-ssh:
+    image: ghcr.io/cjmalloy/jasper-ssh
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    environment:
+      STORAGE_ACCESS: admin@backup
+    volumes:
+      - jasper-storage:/var/lib/jasper
+```
+
+Download files with:
+
+```bash
+sftp -P 22 <user>@host            # files are in /storage
+rclone sync :sftp,host=HOST,port=22,user=USER,key_file=~/.ssh/id_ed25519:/storage ./backup
+```
 
 ## Authorized-key changes
 

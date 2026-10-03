@@ -64,14 +64,15 @@ setup_storage_access() {
             echo "Warning: could not remount $user_chroot/storage read-only; relying on internal-sftp -R." >&2
     fi
 
+    echo "Enabling read-only storage access for $user ($source)."
     echo "    ChrootDirectory $user_chroot" >> "$sshd_config"
     echo "    ForceCommand internal-sftp -R -d /storage" >> "$sshd_config"
-    echo "Read-only storage access to $source enabled for $user."
 }
 
 # Function to create user folder, set up authorized_keys, add sshd_config match user and create nginx server config
 setup_user() {
     key="$1"
+    local storage_access=""
 
     # Extract user tag and optional host origin from the key comment
     comment_field=$(echo "$key" | awk '{print $NF}')
@@ -140,7 +141,6 @@ setup_user() {
     echo "    Banner $home_dir/banner.txt" >> "$sshd_config"
 
     # Give read-only SFTP access to the Jasper storage folder for this origin
-    storage_access=""
     for tag in $STORAGE_ACCESS; do
         if [ "$tag" = "$user_tag$user_origin" ]; then
             storage_access=true

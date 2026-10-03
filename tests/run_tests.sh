@@ -163,6 +163,19 @@ assert_storage_access() {
         fail "An SFTP upload was written to storage"
     printf '%s\n' "$output" | grep -Fq "Permission denied" ||
         fail "The SFTP upload failed for an unexpected reason: $output"
+    sftp "${ssh_options[@]}" -i "$key_dir/bob" -b - bob@target-server-restart \
+        <<< "ls -1" 2>/dev/null | grep -Fqx "backup.zip" ||
+        fail "Bob could not list storage over SFTP"
+    sftp "${ssh_options[@]}" -i "$key_dir/bob" -b - bob@target-server-restart \
+        <<< "rm backup.zip" >/dev/null 2>&1 &&
+        fail "Bob could delete from read-only storage over SFTP"
+    [ -e /workspace/storage/backup.zip ] ||
+        fail "An SFTP delete removed a file from storage"
+    sftp "${ssh_options[@]}" -i "$key_dir/bob" -b - bob@target-server-restart \
+        <<< "mkdir created" >/dev/null 2>&1 &&
+        fail "Bob could create a directory in read-only storage over SFTP"
+    [ ! -e /workspace/storage/created ] ||
+        fail "An SFTP mkdir was written to storage"
     sftp "${ssh_options[@]}" -i "$key_dir/alice" -b - \
         alice@target-server-restart <<< "ls" >/dev/null 2>&1 &&
         fail "Alice could connect over SFTP without storage access"
