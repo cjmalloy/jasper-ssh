@@ -14,10 +14,54 @@ Create an SSH authenticated [jasper](https://github.com/cjmalloy/jasper) proxy
 | `WRITE_ACCESS`       | Sets `Write-Access` header. Requires upstream server to have `JASPER_ALLOW_AUTH_HEADERS` set.                                                                                                                  |                          |
 | `TAG_READ_ACCESS`    | Sets `Tag-Read-Access` header. Requires upstream server to have `JASPER_ALLOW_AUTH_HEADERS` set.                                                                                                               |                          |
 | `TAG_WRITE_ACCESS`   | Sets `Tag-Write-Access` header. Requires upstream server to have `JASPER_ALLOW_AUTH_HEADERS` set.                                                                                                              |                          |
+| `STORAGE_ACCESS`     | Comma separated list of `tag@origin` users granted read-only SFTP access to their origin's Jasper storage folder. See [Storage access](#storage-access).                                                       |                          |
 | `SSHD_LOG_LEVEL`     | Sets the LogLevel in sshd_config.                                                                                                                                                                              | INFO                     |
 | `CONFIG_CHANGE_MODE` | Handles a semantic `/config/authorized_keys` change: `restart` exits immediately; `drain` remains healthy for a Deployment rollout and requires Kubernetes API access.                                           | `restart`                |
 | `AUTHORIZED_KEYS_CONFIGMAP_NAME` | ConfigMap fetched from the Kubernetes API while draining. Required when `CONFIG_CHANGE_MODE=drain`.                                                                                                 |                          |
 | `NAMESPACE`          | Namespace containing the authorized-keys ConfigMap. If unset, the service-account namespace is used.                                                                                                           |                          |
+
+## Storage access
+
+Users listed in `STORAGE_ACCESS` (for example `admin@backup`, or `admin` plus
+`LOCAL_ORIGIN` when the key comment has no origin) can download files such as
+backup zips from the Jasper storage folder for their origin, for example with
+`sftp` or `rclone sync`. Access is read-only: uploads, deletes and renames are
+rejected.
+
+Mount the Jasper storage volume on `/var/lib/jasper`. Jasper stores each origin
+in `/var/lib/jasper/<origin>`, including the leading `@`, and uses
+`/var/lib/jasper/default` for the default origin. If the folder for a user's
+origin does not exist, a warning is logged and that user gets no storage access.
+
+Each user is chrooted into `/opt/chrooted-sftp/<user>`, and the storage folder is
+bind-mounted read-only on `/storage`. The SFTP session starts in that folder.
+Users with storage access can still open their API tunnel. Other users keep
+port forwarding only and cannot open an SFTP session.
+
+Bind mounting requires `--cap-add SYS_ADMIN`, and on hosts with AppArmor
+`--security-opt apparmor=unconfined`. Without them a warning is logged and
+storage access is skipped. In Docker Compose:
+
+```yaml
+services:
+  jasper-ssh:
+    image: ghcr.io/cjmalloy/jasper-ssh
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    environment:
+      STORAGE_ACCESS: admin@backup
+    volumes:
+      - jasper-storage:/var/lib/jasper
+```
+
+Download files with:
+
+```bash
+sftp -P 22 <user>@host            # files are in /storage
+rclone sync :sftp,host=HOST,port=22,user=USER,key_file=~/.ssh/id_ed25519:/storage ./backup
+```
 
 ## Authorized-key changes
 

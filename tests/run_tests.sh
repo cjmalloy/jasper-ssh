@@ -146,6 +146,45 @@ assert_header "$websocket_response" Connection upgrade
 assert_header "$websocket_response" Upgrade websocket
 pass "WebSocket upgrade headers pass through the proxy"
 
+assert_storage_access() {
+    local download=/tmp/backup.zip
+    local output
+
+    rm -f "$download"
+    sftp "${ssh_options[@]}" -i "$key_dir/bob" -b - bob@target-server-restart \
+        <<< "get backup.zip $download" >/dev/null 2>&1 ||
+        fail "Bob could not download from storage over SFTP"
+    cmp -s "$download" /workspace/storage/backup.zip ||
+        fail "The SFTP download did not match the storage file"
+    output=$(sftp "${ssh_options[@]}" -i "$key_dir/bob" -b - \
+        bob@target-server-restart <<< "put $download uploaded.zip" 2>&1) &&
+        fail "Bob could upload to read-only storage over SFTP"
+    [ ! -e /workspace/storage/uploaded.zip ] ||
+        fail "An SFTP upload was written to storage"
+    printf '%s\n' "$output" | grep -Fq "Permission denied" ||
+        fail "The SFTP upload failed for an unexpected reason: $output"
+    sftp "${ssh_options[@]}" -i "$key_dir/bob" -b - bob@target-server-restart \
+        <<< "ls -1" 2>/dev/null | grep -Fqx "backup.zip" ||
+        fail "Bob could not list storage over SFTP"
+    sftp "${ssh_options[@]}" -i "$key_dir/bob" -b - bob@target-server-restart \
+        <<< "rm backup.zip" >/dev/null 2>&1 &&
+        fail "Bob could delete from read-only storage over SFTP"
+    [ -e /workspace/storage/backup.zip ] ||
+        fail "An SFTP delete removed a file from storage"
+    sftp "${ssh_options[@]}" -i "$key_dir/bob" -b - bob@target-server-restart \
+        <<< "mkdir created" >/dev/null 2>&1 &&
+        fail "Bob could create a directory in read-only storage over SFTP"
+    [ ! -e /workspace/storage/created ] ||
+        fail "An SFTP mkdir was written to storage"
+    sftp "${ssh_options[@]}" -i "$key_dir/alice" -b - \
+        alice@target-server-restart <<< "ls" >/dev/null 2>&1 &&
+        fail "Alice could connect over SFTP without storage access"
+    return 0
+}
+
+assert_storage_access
+pass "Users in STORAGE_ACCESS can only download storage files over SFTP"
+
 info "Reordering authorized keys"
 awk '{ keys[NR] = $0 } END { for (line = NR; line > 0; line--) print keys[line] }' \
     "$key_dir/authorized_keys" > "$key_dir/authorized_keys.new"
@@ -215,6 +254,11 @@ done
 curl --fail --silent --max-time 2 http://localhost:19102/ >/dev/null ||
     fail "Docker Compose did not restart the exited server"
 pass "Restart mode exits the server and Docker Compose restarts it"
+
+assert_storage_access
+[ -e /workspace/storage/backup.zip ] ||
+    fail "Restart cleanup removed files from storage"
+pass "Storage access is torn down and restored across restarts"
 
 kill -0 "$bob_pid" 2>/dev/null ||
     fail "Removing alice's key also closed bob's connection"

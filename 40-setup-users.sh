@@ -15,14 +15,64 @@ PasswordAuthentication no
 AllowTcpForwarding yes
 X11Forwarding no
 AllowAgentForwarding no
-ForceCommand /bin/false
+UseDNS no
 PermitOpen none
+Subsystem sftp internal-sftp
+ForceCommand /bin/false
 "
 echo "$sshdConfig" > "$sshd_config"
+
+# Convert the list into a space-separated list
+STORAGE_ACCESS=$(echo $STORAGE_ACCESS | tr ',' ' ')
+
+# Chroot a user into a read-only bind mount of their origin's Jasper storage
+# folder. Jasper stores files in /var/lib/jasper/<origin>, keeping the '@'.
+setup_storage_access() {
+    local user="$1"
+    local origin="$2"
+    local source="/var/lib/jasper/$origin"
+    local user_chroot="/opt/chrooted-sftp/$user"
+
+    case "$origin" in
+        */*|.|..)
+            echo "Warning: invalid origin '$origin' for $user; skipping storage access." >&2
+            return
+            ;;
+    esac
+    if [ ! -d "$source" ]; then
+        echo "Warning: $source does not exist; skipping storage access for $user." >&2
+        return
+    fi
+
+    # sshd requires every component of the chroot path to be root owned and
+    # not group or world writable
+    mkdir -p "$user_chroot/storage" "$user_chroot/etc"
+    chown root:root /opt/chrooted-sftp "$user_chroot" "$user_chroot/etc"
+    chmod 755 /opt/chrooted-sftp "$user_chroot" "$user_chroot/etc"
+    # sshd resolves port forwarding targets inside the chroot
+    printf '127.0.0.1\tlocalhost\n::1\tlocalhost\n' > "$user_chroot/etc/hosts"
+    chmod 644 "$user_chroot/etc/hosts"
+
+    if ! mountpoint -q "$user_chroot/storage"; then
+        if ! mount --bind "$source" "$user_chroot/storage"; then
+            echo "Warning: could not bind mount $source for $user; skipping storage access." >&2
+            rm -f "$user_chroot/etc/hosts"
+            rmdir "$user_chroot/storage" "$user_chroot/etc" "$user_chroot" 2>/dev/null
+            return
+        fi
+        mount -o remount,bind,ro "$user_chroot/storage" ||
+            echo "Warning: could not remount $user_chroot/storage read-only; relying on internal-sftp -R." >&2
+    fi
+
+    echo "Enabling read-only storage access for $user ($source)."
+    echo "    ChrootDirectory $user_chroot" >> "$sshd_config"
+    echo "    ForceCommand internal-sftp -R -d /storage" >> "$sshd_config"
+}
 
 # Function to create user folder, set up authorized_keys, add sshd_config match user and create nginx server config
 setup_user() {
     key="$1"
+    local storage_access=""
 
     # Extract user tag and optional host origin from the key comment
     comment_field=$(echo "$key" | awk '{print $NF}')
@@ -89,6 +139,16 @@ setup_user() {
     echo "Match User $user" >> "$sshd_config"
     echo "    PermitOpen localhost:$port" >> "$sshd_config"
     echo "    Banner $home_dir/banner.txt" >> "$sshd_config"
+
+    # Give read-only SFTP access to the Jasper storage folder for this origin
+    for tag in $STORAGE_ACCESS; do
+        if [ "$tag" = "$user_tag$user_origin" ]; then
+            storage_access=true
+        fi
+    done
+    if [ -n "$storage_access" ]; then
+        setup_storage_access "$user" "${user_origin:-default}"
+    fi
 
     # Write NGINX config for the user
     nginx_config="

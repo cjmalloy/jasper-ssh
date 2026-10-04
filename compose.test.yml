@@ -5,6 +5,7 @@ services:
       dockerfile: tests/Dockerfile
     volumes:
       - ssh-config:/workspace/ssh_config
+      - storage:/workspace/storage
     entrypoint: ["/bin/bash", "/workspace/tests/init_keys.sh"]
     healthcheck:
       test: ["CMD", "test", "-f", "/workspace/ssh_config/ready"]
@@ -69,8 +70,14 @@ services:
   target-server-restart:
     build: .
     restart: unless-stopped
+    # Bind mounting the storage volume into the SFTP chroot requires mount access.
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
     environment:
       LOCAL_ORIGIN: "@test-origin"
+      STORAGE_ACCESS: bob@test-origin
       READ_ACCESS: test-read
       TAG_READ_ACCESS: test-tag-read
       TAG_WRITE_ACCESS: test-tag-write
@@ -82,6 +89,7 @@ services:
       - ssh-config:/config
       - ssh-config:/secrets:ro
       - test-state:/test-state
+      - storage:/var/lib/jasper/@test-origin
     depends_on:
       keygen:
         condition: service_healthy
@@ -140,6 +148,7 @@ services:
     volumes:
       - ssh-config:/workspace/ssh_config
       - test-state:/workspace/test_state
+      - storage:/workspace/storage:ro
     depends_on:
       config-tester:
         condition: service_healthy
@@ -153,4 +162,5 @@ services:
 
 volumes:
   ssh-config:
+  storage:
   test-state:

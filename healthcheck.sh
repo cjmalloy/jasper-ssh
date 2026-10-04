@@ -19,6 +19,14 @@ remove_configured_users() {
 
         log_message "Removing configuration for $user before restart."
         rm -f "/etc/nginx/conf.d/$user.conf"
+        # Never delete recursively here: the chroot contains a bind mount of storage
+        if mountpoint -q "/opt/chrooted-sftp/$user/storage"; then
+            umount -l "/opt/chrooted-sftp/$user/storage" ||
+                echo "Could not unmount storage for $user." >&2
+        fi
+        rm -f "/opt/chrooted-sftp/$user/etc/hosts"
+        rmdir "/opt/chrooted-sftp/$user/storage" "/opt/chrooted-sftp/$user/etc" \
+            "/opt/chrooted-sftp/$user" 2>/dev/null
         if awk -F: -v user="$user" '$1 == user { found = 1 } END { exit !found }' \
             /etc/passwd && ! deluser "$user"; then
             echo "Could not remove user $user; restart aborted." >&2
