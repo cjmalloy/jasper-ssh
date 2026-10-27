@@ -9,14 +9,20 @@ updates:
   directory: /
   schedule:
     interval: daily
+  cooldown:
+    default-days: 0
 - package-ecosystem: github-actions
   directory: /
   schedule:
     interval: daily
+  cooldown:
+    default-days: 0
 - package-ecosystem: gomod
   directory: /controller
   schedule:
     interval: daily
+  cooldown:
+    default-days: 0
   groups:
     k8s:
       patterns:
